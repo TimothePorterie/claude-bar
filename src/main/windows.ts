@@ -1,10 +1,67 @@
-import { BrowserWindow, screen, app } from 'electron'
+import { BrowserWindow, screen, app, session } from 'electron'
 import { join } from 'path'
 import { trayManager } from './tray'
+import { logger } from './services/logger'
+
+// Content Security Policy
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'", // Allow inline styles for dynamic styling
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self' https://api.anthropic.com", // Only allow Anthropic API
+  "frame-src 'none'",
+  "object-src 'none'",
+  "base-uri 'self'"
+].join('; ')
 
 export class WindowManager {
   private popupWindow: BrowserWindow | null = null
   private settingsWindow: BrowserWindow | null = null
+  private securityInitialized = false
+
+  constructor() {
+    // Defer security setup until app is ready
+    if (app.isReady()) {
+      this.setupSecurityHeaders()
+    } else {
+      app.once('ready', () => this.setupSecurityHeaders())
+    }
+  }
+
+  private setupSecurityHeaders(): void {
+    if (this.securityInitialized) return
+    this.securityInitialized = true
+
+    // Add CSP headers to all responses
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [CSP]
+        }
+      })
+    })
+
+    // Block navigation to external URLs
+    app.on('web-contents-created', (_event, contents) => {
+      contents.on('will-navigate', (event, navigationUrl) => {
+        const parsedUrl = new URL(navigationUrl)
+        // Only allow navigation to local files or dev server
+        if (parsedUrl.protocol !== 'file:' && !navigationUrl.startsWith('http://localhost')) {
+          logger.warn(`Blocked navigation to: ${navigationUrl}`)
+          event.preventDefault()
+        }
+      })
+
+      // Block new window creation
+      contents.setWindowOpenHandler(({ url }) => {
+        logger.warn(`Blocked new window to: ${url}`)
+        return { action: 'deny' }
+      })
+    })
+  }
 
   createPopupWindow(): BrowserWindow {
     // Close existing popup if any
@@ -19,7 +76,7 @@ export class WindowManager {
     })
 
     const popupWidth = 320
-    const popupHeight = 380
+    const popupHeight = 480
 
     // Position popup below the tray icon
     let x = trayBounds ? Math.round(trayBounds.x - popupWidth / 2 + trayBounds.width / 2) : 100
@@ -51,12 +108,24 @@ export class WindowManager {
       transparent: true,
       vibrancy: 'popover',
       visualEffectState: 'active',
+      visibleOnAllWorkspaces: true,
+      fullscreenable: false,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         nodeIntegration: false,
-        contextIsolation: true
+        contextIsolation: true,
+        sandbox: true,
+        webSecurity: true,
+        allowRunningInsecureContent: false,
+        experimentalFeatures: false,
+        enableBlinkFeatures: '',
+        spellcheck: false,
+        devTools: !app.isPackaged // Only enable in development
       }
     })
+
+    // Enable visibility on fullscreen apps (macOS)
+    this.popupWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 
     // Load the popup HTML
     if (app.isPackaged) {
@@ -110,7 +179,7 @@ export class WindowManager {
 
     this.settingsWindow = new BrowserWindow({
       width: 450,
-      height: 400,
+      height: 500,
       title: 'Claude Bar Settings',
       resizable: false,
       minimizable: true,
@@ -121,7 +190,14 @@ export class WindowManager {
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         nodeIntegration: false,
-        contextIsolation: true
+        contextIsolation: true,
+        sandbox: true,
+        webSecurity: true,
+        allowRunningInsecureContent: false,
+        experimentalFeatures: false,
+        enableBlinkFeatures: '',
+        spellcheck: false,
+        devTools: !app.isPackaged // Only enable in development
       }
     })
 

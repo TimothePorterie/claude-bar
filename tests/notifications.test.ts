@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 // Mock electron
 vi.mock('electron', () => ({
-  Notification: vi.fn().mockImplementation(() => ({
-    show: vi.fn()
-  })),
+  Notification: class MockNotification {
+    show() {}
+  },
   app: {
     isPackaged: false
   }
