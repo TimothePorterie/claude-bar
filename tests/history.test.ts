@@ -3,18 +3,23 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 // Mock electron-store
 vi.mock('electron-store', () => {
   return {
-    default: vi.fn().mockImplementation(() => {
-      let data: Record<string, unknown> = { entries: [] }
-      return {
-        get: (key: string) => data[key],
-        set: (key: string, value: unknown) => {
-          data[key] = value
-        },
-        clear: () => {
-          data = { entries: [] }
-        }
+    default: class MockStore {
+      private data: Record<string, unknown> = { entries: [] }
+
+      constructor() {}
+
+      get(key: string) {
+        return this.data[key]
       }
-    })
+
+      set(key: string, value: unknown) {
+        this.data[key] = value
+      }
+
+      clear() {
+        this.data = { entries: [] }
+      }
+    }
   }
 })
 
