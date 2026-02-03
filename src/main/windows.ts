@@ -76,7 +76,7 @@ export class WindowManager {
     })
 
     const popupWidth = 320
-    const popupHeight = 380
+    const popupHeight = 480
 
     // Position popup below the tray icon
     let x = trayBounds ? Math.round(trayBounds.x - popupWidth / 2 + trayBounds.width / 2) : 100
