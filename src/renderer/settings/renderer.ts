@@ -6,8 +6,11 @@ const statusText = document.getElementById('statusText') as HTMLElement
 const statusEmail = document.getElementById('statusEmail') as HTMLElement
 const notConnectedHelp = document.getElementById('notConnectedHelp') as HTMLElement
 const refreshInterval = document.getElementById('refreshInterval') as HTMLSelectElement
+const notificationsEnabled = document.getElementById('notificationsEnabled') as HTMLInputElement
 const launchAtLogin = document.getElementById('launchAtLogin') as HTMLInputElement
 const appVersion = document.getElementById('appVersion') as HTMLElement
+const updateText = document.getElementById('updateText') as HTMLElement
+const updateBtn = document.getElementById('updateBtn') as HTMLButtonElement
 
 async function loadConnectionStatus(): Promise<void> {
   try {
@@ -46,6 +49,9 @@ async function loadSettings(): Promise<void> {
     // Set refresh interval
     refreshInterval.value = settings.refreshInterval.toString()
 
+    // Set notifications
+    notificationsEnabled.checked = settings.notificationsEnabled
+
     // Set launch at login
     launchAtLogin.checked = settings.launchAtLogin
   } catch (error) {
@@ -62,6 +68,26 @@ async function loadAppVersion(): Promise<void> {
   }
 }
 
+async function checkForUpdates(): Promise<void> {
+  try {
+    const status = await window.claudeBar.getUpdateStatus()
+
+    if (status.downloaded && status.version) {
+      updateText.textContent = `Update ${status.version} ready to install`
+      updateBtn.style.display = 'inline-block'
+    } else if (status.available && status.version) {
+      updateText.textContent = `Downloading update ${status.version}...`
+      updateBtn.style.display = 'none'
+    } else {
+      updateText.textContent = 'You are running the latest version'
+      updateBtn.style.display = 'none'
+    }
+  } catch (error) {
+    console.error('Failed to check for updates:', error)
+    updateText.textContent = 'Could not check for updates'
+  }
+}
+
 // Event listeners
 refreshInterval.addEventListener('change', async () => {
   const seconds = parseInt(refreshInterval.value, 10)
@@ -69,6 +95,14 @@ refreshInterval.addEventListener('change', async () => {
     await window.claudeBar.setRefreshInterval(seconds)
   } catch (error) {
     console.error('Failed to update refresh interval:', error)
+  }
+})
+
+notificationsEnabled.addEventListener('change', async () => {
+  try {
+    await window.claudeBar.setNotificationsEnabled(notificationsEnabled.checked)
+  } catch (error) {
+    console.error('Failed to update notifications setting:', error)
   }
 })
 
@@ -80,7 +114,16 @@ launchAtLogin.addEventListener('change', async () => {
   }
 })
 
+updateBtn.addEventListener('click', async () => {
+  try {
+    await window.claudeBar.installUpdate()
+  } catch (error) {
+    console.error('Failed to install update:', error)
+  }
+})
+
 // Initial load
 loadConnectionStatus()
 loadSettings()
 loadAppVersion()
+checkForUpdates()

@@ -170,6 +170,50 @@ body {
   cursor: pointer;
 }
 
+/* Setting description */
+.setting-description {
+  font-size: 11px;
+  color: #888;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+/* Update status */
+.update-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 8px;
+}
+
+.update-text {
+  font-size: 13px;
+  color: #555;
+}
+
+.update-btn {
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.update-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.update-btn:active {
+  transform: translateY(0);
+}
+
 /* About section */
 .about {
   text-align: center;
@@ -248,6 +292,18 @@ body {
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.2);
     color: #e5e5e5;
+  }
+
+  .setting-description {
+    color: #777;
+  }
+
+  .update-status {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .update-text {
+    color: #aaa;
   }
 
   .about .version {

@@ -22,8 +22,34 @@
         </button>
       </div>
 
+      <!-- Loading skeleton -->
+      <div class="skeleton-container" id="skeletonContainer">
+        <div class="skeleton-card">
+          <div class="skeleton-header">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-value"></div>
+          </div>
+          <div class="skeleton skeleton-progress"></div>
+          <div class="skeleton-footer">
+            <div class="skeleton skeleton-label"></div>
+            <div class="skeleton skeleton-reset"></div>
+          </div>
+        </div>
+        <div class="skeleton-card">
+          <div class="skeleton-header">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-value"></div>
+          </div>
+          <div class="skeleton skeleton-progress"></div>
+          <div class="skeleton-footer">
+            <div class="skeleton skeleton-label"></div>
+            <div class="skeleton skeleton-reset"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Quota cards -->
-      <div class="quota-cards">
+      <div class="quota-cards" id="quotaCards" style="display: none;">
         <!-- 5-hour session quota -->
         <div class="quota-card" id="fiveHourCard">
           <div class="quota-header">
@@ -55,8 +81,37 @@
         </div>
       </div>
 
+      <!-- History section -->
+      <div class="history-section" id="historySection" style="display: none;">
+        <div class="history-header">
+          <span class="history-title">Usage History</span>
+          <select id="historyPeriod" class="history-select">
+            <option value="1">Last hour</option>
+            <option value="6" selected>Last 6 hours</option>
+            <option value="24">Last 24 hours</option>
+          </select>
+        </div>
+        <div class="history-chart" id="historyChart">
+          <canvas id="chartCanvas"></canvas>
+        </div>
+        <div class="history-stats" id="historyStats">
+          <div class="stat">
+            <span class="stat-label">Avg 5h</span>
+            <span class="stat-value" id="avgFiveHour">--%</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Avg 7d</span>
+            <span class="stat-value" id="avgSevenDay">--%</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Peak</span>
+            <span class="stat-value" id="peakUsage">--%</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Footer -->
-      <div class="footer">
+      <div class="footer" id="footer" style="display: none;">
         <span class="last-updated" id="lastUpdated">Last updated: --</span>
       </div>
 
