@@ -108,6 +108,7 @@ export class WindowManager {
       transparent: true,
       vibrancy: 'popover',
       visualEffectState: 'active',
+      visibleOnAllWorkspaces: true, // Show on all macOS Spaces/desktops
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         nodeIntegration: false,
