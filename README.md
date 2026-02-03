@@ -18,13 +18,37 @@
 
 ## Features
 
-- **Menu Bar Display** — Shows your current quota usage (`XX% / YY%`) right in the menu bar
+### Core
+- **Menu Bar Display** — Shows your current quota usage right in the menu bar
 - **Detailed Popup** — Click to see session (5h) and weekly (7d) quotas with progress bars
 - **Smart Color Coding** — Progress bars change from green → orange → red as usage increases
 - **Auto Refresh** — Configurable refresh interval (30s to 10min)
 - **Dark Mode** — Seamlessly adapts to your macOS appearance
 - **Lightweight** — Runs quietly in the background with minimal resource usage
 - **Native Feel** — Uses macOS vibrancy effects for a native look
+
+### Display Modes
+Choose your preferred menu bar format (right-click → Display Mode):
+- **Standard**: `45% / 32%`
+- **Detailed**: `5h: 45% | 7d: 32%`
+- **Compact**: `45%` (shows highest usage only)
+
+### Usage History
+- Track quota usage over time with persistent storage
+- Interactive chart visualization (1h, 6h, 24h periods)
+- Statistics: average, peak, and minimum values
+
+### Notifications
+- Warning alert at 70% utilization
+- Critical alert at 90% utilization
+- Quota reset notifications
+- Token refresh failure alerts
+- Toggle on/off in Settings
+
+### Auto-Updates
+- Automatic update checks on startup
+- Background download of updates
+- One-click install from Settings
 
 ## Requirements
 
@@ -93,6 +117,8 @@ Access settings via right-click → Settings:
 
 - **Refresh Interval**: How often to fetch new quota data (30s - 10min)
 - **Launch at Login**: Automatically start Claude Bar when you log in
+- **Notifications**: Enable/disable system notifications for quota alerts
+- **Updates**: Check for updates and install with one click
 
 ## How It Works
 
@@ -103,6 +129,21 @@ GET https://api.anthropic.com/api/oauth/usage
 ```
 
 No API keys or manual configuration required — if you're logged into Claude Code, you're ready to go!
+
+### Token Management
+
+Claude Bar automatically handles token refresh:
+- Detects expired OAuth tokens
+- Refreshes tokens using the refresh token
+- Updates the Keychain with new credentials
+- Graceful fallback if refresh fails
+
+### Security
+
+- **Context Isolation**: Renderer cannot access Node.js
+- **Preload Bridge**: All IPC via secure contextBridge
+- **Keychain Storage**: Credentials stored in macOS Keychain
+- **Signed Updates**: Auto-updates are signed and verified
 
 ## Development
 
@@ -126,13 +167,22 @@ npm run dist
 claude-bar/
 ├── src/
 │   ├── main/           # Electron main process
-│   │   ├── services/   # Keychain, API, Scheduler
+│   │   ├── services/   # Keychain, API, Scheduler, History, Notifications, Updater
 │   │   ├── tray.ts     # Menu bar icon management
 │   │   └── windows.ts  # Popup & Settings windows
 │   ├── preload/        # Secure IPC bridge
 │   └── renderer/       # UI (popup & settings)
+├── tests/              # Vitest unit tests
 ├── assets/             # Icons
 └── scripts/            # Icon generation scripts
+```
+
+### Running Tests
+
+```bash
+npm run test           # Run all tests
+npm run test:watch     # Run tests in watch mode
+npm run test:coverage  # Run tests with coverage report
 ```
 
 ## Troubleshooting
