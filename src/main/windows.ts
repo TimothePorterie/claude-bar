@@ -19,13 +19,21 @@ const CSP = [
 export class WindowManager {
   private popupWindow: BrowserWindow | null = null
   private settingsWindow: BrowserWindow | null = null
+  private securityInitialized = false
 
   constructor() {
-    // Set up security headers for all windows
-    this.setupSecurityHeaders()
+    // Defer security setup until app is ready
+    if (app.isReady()) {
+      this.setupSecurityHeaders()
+    } else {
+      app.once('ready', () => this.setupSecurityHeaders())
+    }
   }
 
   private setupSecurityHeaders(): void {
+    if (this.securityInitialized) return
+    this.securityInitialized = true
+
     // Add CSP headers to all responses
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({
