@@ -130,13 +130,10 @@ async function loadUserInfo(): Promise<void> {
 // Simple canvas chart drawing
 function drawChart(data: HistoryChartData): void {
   const ctx = chartCanvas.getContext('2d')
-  if (!ctx || data.labels.length === 0) return
+  if (!ctx) return
 
   const width = chartCanvas.width
   const height = chartCanvas.height
-  const padding = { top: 10, right: 10, bottom: 20, left: 30 }
-  const chartWidth = width - padding.left - padding.right
-  const chartHeight = height - padding.top - padding.bottom
 
   // Clear canvas
   ctx.clearRect(0, 0, width, height)
@@ -144,6 +141,21 @@ function drawChart(data: HistoryChartData): void {
   // Detect dark mode
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
   const textColor = isDark ? '#888' : '#666'
+
+  // Show message if not enough data
+  if (data.labels.length < 2) {
+    ctx.fillStyle = textColor
+    ctx.font = '12px -apple-system, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText('Collecting data...', width / 2, height / 2)
+    ctx.font = '10px -apple-system, sans-serif'
+    ctx.fillText('History will appear after a few refreshes', width / 2, height / 2 + 16)
+    return
+  }
+
+  const padding = { top: 10, right: 10, bottom: 20, left: 30 }
+  const chartWidth = width - padding.left - padding.right
+  const chartHeight = height - padding.top - padding.bottom
   const gridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
 
   // Draw grid lines
