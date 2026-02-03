@@ -108,7 +108,8 @@ export class WindowManager {
       transparent: true,
       vibrancy: 'popover',
       visualEffectState: 'active',
-      visibleOnAllWorkspaces: true, // Show on all macOS Spaces/desktops
+      visibleOnAllWorkspaces: true,
+      fullscreenable: false,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         nodeIntegration: false,
@@ -122,6 +123,9 @@ export class WindowManager {
         devTools: !app.isPackaged // Only enable in development
       }
     })
+
+    // Enable visibility on fullscreen apps (macOS)
+    this.popupWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 
     // Load the popup HTML
     if (app.isPackaged) {
