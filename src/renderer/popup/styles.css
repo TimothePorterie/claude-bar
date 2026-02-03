@@ -77,6 +77,68 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* Skeleton loading */
+.skeleton-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeleton-card {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, rgba(0,0,0,0.06) 25%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.06) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.skeleton-title {
+  width: 80px;
+  height: 14px;
+}
+
+.skeleton-value {
+  width: 40px;
+  height: 18px;
+}
+
+.skeleton-progress {
+  height: 8px;
+  margin-bottom: 10px;
+}
+
+.skeleton-footer {
+  display: flex;
+  justify-content: space-between;
+}
+
+.skeleton-label {
+  width: 60px;
+  height: 12px;
+}
+
+.skeleton-reset {
+  width: 50px;
+  height: 12px;
+}
+
 /* Quota cards */
 .quota-cards {
   display: flex;
@@ -157,6 +219,80 @@ body {
   color: #555;
 }
 
+/* History section */
+.history-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.history-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+}
+
+.history-select {
+  font-size: 11px;
+  padding: 4px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #333;
+  cursor: pointer;
+  outline: none;
+}
+
+.history-select:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.history-chart {
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 12px;
+}
+
+.history-chart canvas {
+  width: 100%;
+  height: 80px;
+}
+
+.history-stats {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+}
+
+.stat {
+  text-align: center;
+  flex: 1;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 6px;
+}
+
+.stat-label {
+  display: block;
+  font-size: 10px;
+  color: #888;
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
 /* Footer */
 .footer {
   margin-top: 16px;
@@ -234,6 +370,16 @@ body {
     color: #e5e5e5;
   }
 
+  .skeleton-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+    background-size: 200% 100%;
+  }
+
   .quota-card {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.1);
@@ -257,6 +403,40 @@ body {
 
   .reset-value {
     color: #aaa;
+  }
+
+  .history-section {
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .history-title {
+    color: #aaa;
+  }
+
+  .history-select {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #e5e5e5;
+  }
+
+  .history-select:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .history-chart {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .stat {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .stat-label {
+    color: #777;
+  }
+
+  .stat-value {
+    color: #e5e5e5;
   }
 
   .footer {

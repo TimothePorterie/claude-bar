@@ -45,6 +45,18 @@
         </div>
       </div>
 
+      <!-- Notifications -->
+      <div class="section">
+        <h2>Notifications</h2>
+        <div class="setting-row">
+          <label for="notificationsEnabled">
+            <input type="checkbox" id="notificationsEnabled" checked />
+            Enable quota notifications
+          </label>
+        </div>
+        <p class="setting-description">Get notified when your quota reaches warning (70%) or critical (90%) levels, and when it resets.</p>
+      </div>
+
       <!-- Startup -->
       <div class="section">
         <h2>Startup</h2>
@@ -53,6 +65,15 @@
             <input type="checkbox" id="launchAtLogin" />
             Launch Claude Bar at login
           </label>
+        </div>
+      </div>
+
+      <!-- Updates -->
+      <div class="section">
+        <h2>Updates</h2>
+        <div class="update-status" id="updateStatus">
+          <span class="update-text" id="updateText">Checking for updates...</span>
+          <button class="update-btn" id="updateBtn" style="display: none;">Install Update</button>
         </div>
       </div>
 

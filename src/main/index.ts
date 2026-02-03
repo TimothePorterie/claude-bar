@@ -3,6 +3,8 @@ import { trayManager } from './tray'
 import { windowManager } from './windows'
 import { schedulerService } from './services/scheduler'
 import { setupIpcHandlers, loadSettings } from './ipc-handlers'
+import { updaterService } from './services/updater'
+import { logger } from './services/logger'
 
 // Prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock()
@@ -22,6 +24,8 @@ if (!gotTheLock) {
   }
 
   app.whenReady().then(() => {
+    logger.info(`Claude Bar v${app.getVersion()} starting...`)
+
     // Setup IPC handlers
     setupIpcHandlers()
 
@@ -36,6 +40,11 @@ if (!gotTheLock) {
 
     // Start the scheduler for automatic refresh
     schedulerService.start()
+
+    // Initialize auto-updater
+    updaterService.initialize()
+
+    logger.info('Claude Bar started successfully')
   })
 
   // macOS: Keep app running when all windows are closed
@@ -51,6 +60,7 @@ if (!gotTheLock) {
   })
 
   app.on('before-quit', () => {
+    logger.info('Claude Bar shutting down...')
     schedulerService.stop()
     trayManager.destroy()
     windowManager.closeAll()

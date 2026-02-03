@@ -20,22 +20,32 @@ Main Process (Electron)
 ├── windows.ts            # Popup and settings window management
 ├── ipc-handlers.ts       # IPC communication with renderer
 └── services/
-    ├── keychain.ts       # macOS Keychain credential access
-    ├── quota-api.ts      # Anthropic API integration
-    └── scheduler.ts      # Auto-refresh timer
+    ├── keychain.ts       # macOS Keychain credential access + token refresh
+    ├── quota-api.ts      # Anthropic API integration with retry logic
+    ├── scheduler.ts      # Auto-refresh timer
+    ├── logger.ts         # Persistent logging with electron-log
+    ├── notifications.ts  # macOS system notifications
+    ├── history.ts        # Usage history tracking
+    └── updater.ts        # Auto-update functionality
 
 Preload
 └── index.ts              # Secure IPC bridge (contextBridge)
 
 Renderer
 ├── popup/                # Main quota display window
-│   ├── index.html
+│   ├── index.html        # With skeleton loading & history chart
 │   ├── renderer.ts
 │   └── styles.css
 └── settings/             # Settings configuration window
-    ├── index.html
+    ├── index.html        # With notifications toggle & update status
     ├── renderer.ts
     └── styles.css
+
+Tests
+└── tests/                # Vitest unit tests
+    ├── history.test.ts
+    ├── notifications.test.ts
+    └── quota-api.test.ts
 ```
 
 ## Key Files
@@ -43,35 +53,77 @@ Renderer
 | File | Purpose |
 |------|---------|
 | `src/main/index.ts` | App lifecycle, single instance lock, dock hiding |
-| `src/main/tray.ts` | Menu bar icon, title updates, context menu |
-| `src/main/services/keychain.ts` | Reads OAuth token from `Claude Code-credentials` in Keychain |
-| `src/main/services/quota-api.ts` | Fetches quota from `api.anthropic.com/api/oauth/usage` |
+| `src/main/tray.ts` | Menu bar icon, title updates, context menu, display modes |
+| `src/main/services/keychain.ts` | OAuth token access + automatic refresh |
+| `src/main/services/quota-api.ts` | API calls with retry logic + notifications |
 | `src/main/services/scheduler.ts` | Periodic refresh (default 60s) |
+| `src/main/services/logger.ts` | Persistent file logging |
+| `src/main/services/notifications.ts` | System notifications for quota alerts |
+| `src/main/services/history.ts` | Usage history storage and chart data |
+| `src/main/services/updater.ts` | Auto-update via electron-updater |
 | `src/preload/index.ts` | Exposes `window.claudeBar` API to renderer |
+
+## Features
+
+### Core Features
+- Real-time quota monitoring (5-hour session + 7-day weekly)
+- Menu bar icon with color-coded status (green/orange/red)
+- Configurable auto-refresh (30s to 10min)
+- Launch at login option
+
+### Display Modes (right-click menu)
+- **Standard**: `45% / 32%`
+- **Detailed**: `5h: 45% | 7d: 32%`
+- **Compact**: `45%` (shows highest)
+
+### Notifications
+- Warning alert at 70% utilization
+- Critical alert at 90% utilization
+- Quota reset notifications
+- Token refresh failure alerts
+
+### Usage History
+- Tracks quota over time with persistent storage
+- Chart visualization (1h, 6h, 24h periods)
+- Statistics: average, peak, min values
+
+### Token Management
+- Automatic OAuth token refresh when expired
+- Updates Keychain with refreshed tokens
+- Graceful fallback on refresh failure
+
+### Error Handling
+- Exponential backoff retry (up to 3 attempts)
+- Automatic token refresh on 401 errors
+- Detailed logging for debugging
+
+### Auto-Updates
+- Automatic update checks on startup
+- Background download of updates
+- One-click install from Settings
 
 ## Data Flow
 
-1. **Startup**: App loads settings from `electron-store`, hides dock icon, creates tray
-2. **Credential Access**: `KeychainService` reads OAuth token via `security find-generic-password`
-3. **API Call**: `QuotaService` calls Anthropic API with Bearer token
-4. **Display Update**: Tray title shows `XX% / YY%`, icon color reflects quota level
-5. **Auto-refresh**: Scheduler triggers refresh at configurable interval (30s-10min)
+1. **Startup**: App loads settings, initializes logger, hides dock icon
+2. **Credential Access**: `KeychainService` reads/refreshes OAuth token
+3. **API Call**: `QuotaService` calls API with retry logic
+4. **History Recording**: Usage data stored for chart visualization
+5. **Notification Check**: Alerts sent on threshold crossings
+6. **Display Update**: Tray title + tooltip + icon updated
+7. **Auto-refresh**: Scheduler triggers at configured interval
 
 ## API Integration
 
 ```typescript
-// Endpoint
+// Quota Endpoint
 GET https://api.anthropic.com/api/oauth/usage
-
-// Headers
 Authorization: Bearer {accessToken}
 anthropic-beta: oauth-2025-04-20
 
-// Response
-{
-  five_hour: { utilization: number, resets_at: string },
-  seven_day: { utilization: number, resets_at: string }
-}
+// Token Refresh Endpoint
+POST https://api.anthropic.com/api/oauth/token
+Content-Type: application/x-www-form-urlencoded
+grant_type=refresh_token&refresh_token={token}&client_id=claude-code
 ```
 
 ## Keychain Structure
@@ -93,39 +145,54 @@ Credentials stored under `Claude Code-credentials`:
 
 ## Quota Levels
 
-| Level | Utilization | Icon Color | Tray Icon |
-|-------|-------------|------------|-----------|
-| Normal | 0-69% | Green | `iconTemplate.png` |
-| Warning | 70-89% | Orange | `icon-warning.png` |
-| Critical | 90-100% | Red | `icon-critical.png` |
+| Level | Utilization | Icon Color | Notification |
+|-------|-------------|------------|--------------|
+| Normal | 0-69% | Green | None |
+| Warning | 70-89% | Orange | Warning alert |
+| Critical | 90-100% | Red | Critical alert |
 
 ## IPC Channels
 
 | Channel | Direction | Purpose |
 |---------|-----------|---------|
-| `get-quota` | renderer → main | Get cached quota |
+| `get-quota` | renderer → main | Fetch quota (with cache) |
 | `refresh-quota` | renderer → main | Force refresh |
-| `has-credentials` | renderer → main | Check if logged in |
+| `get-cached-quota` | renderer → main | Get cached data only |
+| `has-credentials` | renderer → main | Check login status |
 | `get-user-info` | renderer → main | Get user details |
-| `get-settings` | renderer → main | Load settings |
-| `set-settings` | renderer → main | Save settings |
-| `get-app-info` | renderer → main | Get version info |
+| `get-settings` | renderer → main | Load all settings |
+| `set-refresh-interval` | renderer → main | Update refresh rate |
+| `set-launch-at-login` | renderer → main | Update startup setting |
+| `set-notifications-enabled` | renderer → main | Toggle notifications |
+| `get-history` | renderer → main | Get usage history |
+| `get-history-chart-data` | renderer → main | Get chart-ready data |
+| `get-history-stats` | renderer → main | Get statistics |
+| `clear-history` | renderer → main | Clear history data |
+| `check-for-updates` | renderer → main | Check for app updates |
+| `get-update-status` | renderer → main | Get update state |
+| `install-update` | renderer → main | Install pending update |
+| `get-log-path` | renderer → main | Get log file location |
 
 ## Settings (electron-store)
 
 ```typescript
 {
-  refreshInterval: number  // seconds, default: 60
-  launchAtLogin: boolean   // default: false
+  refreshInterval: number       // seconds, default: 60
+  launchAtLogin: boolean        // default: false
+  notificationsEnabled: boolean // default: true
+  displayMode: 'standard' | 'detailed' | 'compact' // default: 'standard'
 }
 ```
 
 ## Development Commands
 
 ```bash
-npm run dev       # Development mode with hot reload
-npm run build     # Build for production
-npm run dist      # Create DMG (arm64 + x64)
+npm run dev          # Development mode with hot reload
+npm run build        # Build for production
+npm run dist         # Create DMG (arm64 + x64)
+npm run test         # Run Vitest tests
+npm run test:watch   # Run tests in watch mode
+npm run test:coverage # Run tests with coverage report
 ```
 
 ## Build Output
@@ -139,18 +206,23 @@ npm run dist      # Create DMG (arm64 + x64)
 - **Context Isolation**: Enabled (renderer cannot access Node.js)
 - **Node Integration**: Disabled in renderer
 - **Preload Bridge**: All IPC via `contextBridge.exposeInMainWorld`
-- **Keychain**: Read-only access to Claude Code credentials
+- **Keychain**: Read/write access for token refresh
+- **Auto-Update**: Signed updates from GitHub Releases
 
 ## File Locations
 
 - **App Data**: `~/Library/Application Support/claude-bar/`
-- **Settings**: Stored via electron-store in app data
+- **Settings**: `config.json` via electron-store
+- **History**: `quota-history.json` via electron-store
+- **Logs**: `logs/claude-bar.log` (max 5MB, rotated)
 - **Credentials**: macOS Keychain (`Claude Code-credentials`)
 
 ## Dependencies
 
 **Runtime:**
-- `electron-store` - Persistent settings storage
+- `electron-store` - Persistent settings and history storage
+- `electron-log` - File-based logging
+- `electron-updater` - Auto-update functionality
 
 **Dev:**
 - `electron` - Desktop framework
@@ -158,3 +230,4 @@ npm run dist      # Create DMG (arm64 + x64)
 - `electron-builder` - DMG packaging
 - `typescript` - Type safety
 - `vite` - Frontend bundler
+- `vitest` - Unit testing framework
