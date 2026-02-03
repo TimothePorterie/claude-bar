@@ -1,0 +1,260 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  background: transparent;
+  color: #1a1a2e;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.settings-container {
+  padding: 20px;
+  padding-top: 50px; /* Space for title bar */
+  min-height: 100vh;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Title bar */
+.title-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: drag;
+  background: rgba(255, 255, 255, 0.8);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.title-bar h1 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Sections */
+.section {
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.section h2 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+  margin-bottom: 12px;
+}
+
+/* Connection status */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 8px;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.status-indicator.connected {
+  background: #22c55e;
+}
+
+.status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.status-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.status-email {
+  font-size: 12px;
+  color: #666;
+}
+
+.not-connected-help {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: 8px;
+}
+
+.not-connected-help p {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.not-connected-help code {
+  display: block;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 13px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.not-connected-help .hint {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 0;
+}
+
+/* Setting rows */
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.setting-row label {
+  font-size: 14px;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setting-row select {
+  padding: 6px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  background: white;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  outline: none;
+}
+
+.setting-row select:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.setting-row input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #667eea;
+  cursor: pointer;
+}
+
+/* About section */
+.about {
+  text-align: center;
+  padding-top: 12px;
+}
+
+.about .version {
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.about .credits {
+  font-size: 11px;
+  color: #999;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  body {
+    color: #e5e5e5;
+  }
+
+  .settings-container {
+    background: rgba(30, 30, 30, 0.95);
+  }
+
+  .title-bar {
+    background: rgba(30, 30, 30, 0.9);
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .title-bar h1 {
+    color: #e5e5e5;
+  }
+
+  .section {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .section h2 {
+    color: #888;
+  }
+
+  .connection-status {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .status-text {
+    color: #e5e5e5;
+  }
+
+  .status-email {
+    color: #999;
+  }
+
+  .not-connected-help {
+    background: rgba(239, 68, 68, 0.15);
+  }
+
+  .not-connected-help p {
+    color: #aaa;
+  }
+
+  .not-connected-help code {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e5e5e5;
+  }
+
+  .setting-row label {
+    color: #e5e5e5;
+  }
+
+  .setting-row select {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #e5e5e5;
+  }
+
+  .about .version {
+    color: #999;
+  }
+
+  .about .credits {
+    color: #666;
+  }
+}

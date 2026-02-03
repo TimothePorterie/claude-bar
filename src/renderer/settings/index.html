@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Claude Bar Settings</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="settings-container">
+      <!-- Title bar drag region -->
+      <div class="title-bar">
+        <h1>Settings</h1>
+      </div>
+
+      <!-- Connection status -->
+      <div class="section">
+        <h2>Connection Status</h2>
+        <div class="connection-status" id="connectionStatus">
+          <div class="status-indicator connected" id="statusIndicator"></div>
+          <div class="status-info">
+            <span class="status-text" id="statusText">Connected</span>
+            <span class="status-email" id="statusEmail">--</span>
+          </div>
+        </div>
+        <div class="not-connected-help" id="notConnectedHelp" style="display: none;">
+          <p>To connect Claude Bar, authenticate with the Claude Code CLI:</p>
+          <code>claude login</code>
+          <p class="hint">Then restart Claude Bar to pick up the new credentials.</p>
+        </div>
+      </div>
+
+      <!-- Refresh interval -->
+      <div class="section">
+        <h2>Refresh Interval</h2>
+        <div class="setting-row">
+          <label for="refreshInterval">Update quota every</label>
+          <select id="refreshInterval">
+            <option value="30">30 seconds</option>
+            <option value="60" selected>1 minute</option>
+            <option value="120">2 minutes</option>
+            <option value="300">5 minutes</option>
+            <option value="600">10 minutes</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Startup -->
+      <div class="section">
+        <h2>Startup</h2>
+        <div class="setting-row">
+          <label for="launchAtLogin">
+            <input type="checkbox" id="launchAtLogin" />
+            Launch Claude Bar at login
+          </label>
+        </div>
+      </div>
+
+      <!-- About -->
+      <div class="section about">
+        <p class="version">Claude Bar v<span id="appVersion">1.0.0</span></p>
+        <p class="credits">Monitor your Claude Code quotas from the menu bar</p>
+      </div>
+    </div>
+    <script type="module" src="./renderer.ts"></script>
+  </body>
+</html>

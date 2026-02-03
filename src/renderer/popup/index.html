@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Claude Bar</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="popup-container">
+      <!-- Header with user info -->
+      <div class="header" id="header">
+        <div class="user-info">
+          <span class="user-name" id="userName">Loading...</span>
+          <span class="badge">Pro</span>
+        </div>
+        <button class="refresh-btn" id="refreshBtn" title="Refresh">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6M1 20v-6h6"/>
+            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Quota cards -->
+      <div class="quota-cards">
+        <!-- 5-hour session quota -->
+        <div class="quota-card" id="fiveHourCard">
+          <div class="quota-header">
+            <span class="quota-title">Session (5h)</span>
+            <span class="quota-value" id="fiveHourValue">--%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="fiveHourProgress"></div>
+          </div>
+          <div class="quota-footer">
+            <span class="reset-label">Resets in</span>
+            <span class="reset-value" id="fiveHourReset">--</span>
+          </div>
+        </div>
+
+        <!-- 7-day weekly quota -->
+        <div class="quota-card" id="sevenDayCard">
+          <div class="quota-header">
+            <span class="quota-title">Weekly (7d)</span>
+            <span class="quota-value" id="sevenDayValue">--%</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="sevenDayProgress"></div>
+          </div>
+          <div class="quota-footer">
+            <span class="reset-label">Resets in</span>
+            <span class="reset-value" id="sevenDayReset">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <span class="last-updated" id="lastUpdated">Last updated: --</span>
+      </div>
+
+      <!-- Not connected state -->
+      <div class="not-connected" id="notConnected" style="display: none;">
+        <div class="not-connected-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 8v4M12 16h.01"/>
+          </svg>
+        </div>
+        <h3>Not Connected</h3>
+        <p>Please authenticate with Claude Code CLI first:</p>
+        <code>claude login</code>
+      </div>
+    </div>
+    <script type="module" src="./renderer.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "claude-bar",
+  "version": "1.0.0",
+  "description": "macOS Menu Bar app for Claude Code quotas",
+  "main": "dist/main/index.js",
+  "author": "Claude Bar",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "electron-vite": "^2.0.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  },
+  "build": {
+    "extends": "electron-builder.json"
+  }
+}

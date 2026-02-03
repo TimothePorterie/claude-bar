@@ -1,0 +1,286 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  background: transparent;
+  color: #1a1a2e;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.popup-container {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  min-height: 100vh;
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+}
+
+.badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.refresh-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  color: #666;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #333;
+}
+
+.refresh-btn.loading svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Quota cards */
+.quota-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quota-card {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  padding: 14px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.quota-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.quota-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.quota-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+}
+
+.quota-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333;
+}
+
+/* Progress bar */
+.progress-bar {
+  height: 8px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease, background-color 0.3s ease;
+  background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%);
+}
+
+.progress-fill.warning {
+  background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
+}
+
+.progress-fill.critical {
+  background: linear-gradient(90deg, #f87171 0%, #ef4444 100%);
+}
+
+.quota-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.reset-label {
+  font-size: 11px;
+  color: #888;
+}
+
+.reset-value {
+  font-size: 12px;
+  font-weight: 500;
+  color: #555;
+}
+
+/* Footer */
+.footer {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  text-align: center;
+}
+
+.last-updated {
+  font-size: 11px;
+  color: #888;
+}
+
+/* Not connected state */
+.not-connected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.not-connected-icon {
+  color: #999;
+  margin-bottom: 16px;
+}
+
+.not-connected h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.not-connected p {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.not-connected code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 13px;
+  color: #333;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  body {
+    color: #e5e5e5;
+  }
+
+  .popup-container {
+    background: rgba(30, 30, 30, 0.9);
+  }
+
+  .header {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .user-name {
+    color: #e5e5e5;
+  }
+
+  .refresh-btn {
+    color: #999;
+  }
+
+  .refresh-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e5e5e5;
+  }
+
+  .quota-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .quota-title {
+    color: #aaa;
+  }
+
+  .quota-value {
+    color: #e5e5e5;
+  }
+
+  .progress-bar {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .reset-label {
+    color: #777;
+  }
+
+  .reset-value {
+    color: #aaa;
+  }
+
+  .footer {
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .last-updated {
+    color: #777;
+  }
+
+  .not-connected-icon {
+    color: #666;
+  }
+
+  .not-connected h3 {
+    color: #e5e5e5;
+  }
+
+  .not-connected p {
+    color: #999;
+  }
+
+  .not-connected code {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e5e5e5;
+  }
+}
