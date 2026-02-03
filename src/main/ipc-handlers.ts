@@ -38,13 +38,14 @@ export function setupIpcHandlers(): void {
   })
 
   // Get user info from credentials
-  ipcMain.handle('get-user-info', async (): Promise<{ email?: string; name?: string } | null> => {
+  ipcMain.handle('get-user-info', async (): Promise<{ email?: string; name?: string; subscriptionType?: string } | null> => {
     const credentials = await keychainService.getCredentials()
     if (!credentials) return null
 
     return {
       email: credentials.emailAddress,
-      name: credentials.displayName
+      name: credentials.displayName,
+      subscriptionType: credentials.subscriptionType
     }
   })
 

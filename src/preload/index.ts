@@ -22,6 +22,7 @@ export interface Settings {
 export interface UserInfo {
   email?: string
   name?: string
+  subscriptionType?: string
 }
 
 const api = {
