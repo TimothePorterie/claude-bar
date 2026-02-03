@@ -59,9 +59,16 @@ Choose your preferred menu bar format (right-click → Display Mode):
 
 ### From DMG (Recommended)
 
-1. Download the latest `Claude Bar-x.x.x-universal.dmg` from [Releases](https://github.com/TheFugu/claude-bar/releases)
+1. Download the latest DMG from [Releases](https://github.com/TheFugu/claude-bar/releases):
+   - **Apple Silicon (M1/M2/M3):** `Claude.Bar-x.x.x-arm64.dmg`
+   - **Intel:** `Claude.Bar-x.x.x-x64.dmg`
 2. Open the DMG and drag **Claude Bar** to your Applications folder
-3. Launch Claude Bar from Applications
+3. **Important (Apple Silicon):** The app is not notarized. Before first launch, run:
+   ```bash
+   xattr -cr /Applications/Claude\ Bar.app
+   codesign --force --deep --sign - /Applications/Claude\ Bar.app
+   ```
+4. Launch Claude Bar from Applications
 
 ### From Source
 
@@ -198,6 +205,15 @@ Then restart Claude Bar.
 ### Quota not updating
 
 Try right-clicking the menu bar icon and selecting "Refresh". If the issue persists, check your internet connection.
+
+### "Cannot open application" error
+
+On Apple Silicon Macs, you may see this error because the app is not notarized. Run these commands in Terminal:
+```bash
+xattr -cr /Applications/Claude\ Bar.app
+codesign --force --deep --sign - /Applications/Claude\ Bar.app
+```
+Then try opening the app again.
 
 ### App not starting
 
