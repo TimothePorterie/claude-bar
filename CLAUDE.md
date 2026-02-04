@@ -53,13 +53,14 @@ Tests
 | File | Purpose |
 |------|---------|
 | `src/main/index.ts` | App lifecycle, single instance lock, dock hiding |
-| `src/main/tray.ts` | Menu bar icon, title updates, context menu, display modes |
+| `src/main/tray.ts` | Menu bar icon, title updates, context menu, display modes, pause menu |
+| `src/main/windows.ts` | Popup and settings windows, auto-fit content height |
 | `src/main/services/keychain.ts` | OAuth token access + automatic refresh |
-| `src/main/services/quota-api.ts` | API calls with retry logic + notifications |
-| `src/main/services/scheduler.ts` | Periodic refresh (default 60s) |
+| `src/main/services/quota-api.ts` | API calls with retry logic, error classification, tooltips |
+| `src/main/services/scheduler.ts` | Periodic refresh, adaptive intervals, pause/resume |
 | `src/main/services/logger.ts` | Persistent file logging |
-| `src/main/services/notifications.ts` | System notifications for quota alerts |
-| `src/main/services/history.ts` | Usage history storage and chart data |
+| `src/main/services/notifications.ts` | System notifications, customizable thresholds, pause support |
+| `src/main/services/history.ts` | Usage history, trend calculation, time-to-threshold estimation |
 | `src/main/services/updater.ts` | Auto-update via electron-updater |
 | `src/preload/index.ts` | Exposes `window.claudeBar` API to renderer |
 
@@ -68,24 +69,69 @@ Tests
 ### Core Features
 - Real-time quota monitoring (5-hour session + 7-day weekly)
 - Menu bar icon with color-coded status (green/orange/red)
-- Configurable auto-refresh (30s to 10min)
+- Configurable auto-refresh (30s to 10min) with adaptive mode
 - Launch at login option
+- Visual feedback (pulse animation + toast) on refresh
+- Auto-fit popup window to content
 
 ### Display Modes (right-click menu)
 - **Standard**: `45% / 32%`
-- **Detailed**: `5h: 45% | 7d: 32%`
+- **Detailed**: `5h: 45%↑ | 7d: 32%→` (with trend indicators)
 - **Compact**: `45%` (shows highest)
+- **Time Remaining**: `4h 30m` (time until session reset)
+- **Minimal**: Icon only, no text
+
+### Trend Indicators
+- Analyzes usage over last 30 minutes
+- Shows direction: ↑ (rising), ↓ (falling), → (stable)
+- Displayed in popup, detailed mode title, and tooltip
+- Threshold: ±2% per hour for stable
 
 ### Notifications
-- Warning alert at 70% utilization
-- Critical alert at 90% utilization
+- Customizable warning threshold (50-99%, default: 70%)
+- Customizable critical threshold (50-99%, default: 90%)
 - Quota reset notifications
 - Token refresh failure alerts
+- Respects pause mode (suppressed while paused)
+
+### Adaptive Refresh
+- Automatically increases refresh rate based on quota level
+- Normal: uses configured interval
+- Warning: 2x faster (min 30s)
+- Critical: 4x faster (min 15s)
+- Toggle on/off in settings
+
+### Pause Mode
+- Temporarily stop monitoring and notifications
+- Duration options: 30min, 1h, 2h, or indefinite
+- Shows pause status in menu bar with countdown
+- Auto-resume after duration expires
+
+### Time to Critical
+- Estimates when quota will reach critical level
+- Based on current trend (delta per hour)
+- Only shown when trending up and < 24h away
+- Can be toggled off in settings
+
+### Reset Progress Bar
+- Shows time elapsed in current quota period
+- Thin bar below each quota card
+- Helps visualize when quota will roll over
 
 ### Usage History
 - Tracks quota over time with persistent storage
 - Chart visualization (1h, 6h, 24h periods)
 - Statistics: average, peak, min values
+- Trend calculation from historical data
+
+### Enhanced Tooltips
+Hover over menu bar icon to see:
+- Session/Weekly usage with trend arrows
+- Time until reset for each quota
+- Estimated time to critical (if applicable)
+- Next refresh countdown
+- Pause status (if paused)
+- Last updated timestamp
 
 ### Token Management
 - Automatic OAuth token refresh when expired
@@ -96,6 +142,8 @@ Tests
 - Exponential backoff retry (up to 3 attempts)
 - Automatic token refresh on 401 errors
 - Detailed logging for debugging
+- Contextual error UI with retry button
+- Error types: network, auth, rate_limit, server, unknown
 
 ### Auto-Updates
 - Automatic update checks on startup
@@ -104,13 +152,16 @@ Tests
 
 ## Data Flow
 
-1. **Startup**: App loads settings, initializes logger, hides dock icon
+1. **Startup**: App loads settings (including thresholds), initializes logger, hides dock icon
 2. **Credential Access**: `KeychainService` reads/refreshes OAuth token
 3. **API Call**: `QuotaService` calls API with retry logic
-4. **History Recording**: Usage data stored for chart visualization
-5. **Notification Check**: Alerts sent on threshold crossings
-6. **Display Update**: Tray title + tooltip + icon updated
-7. **Auto-refresh**: Scheduler triggers at configured interval
+4. **History Recording**: Usage data stored for trend analysis and charts
+5. **Trend Calculation**: `HistoryService.getTrend()` analyzes last 30 min
+6. **Notification Check**: Alerts sent on threshold crossings (respects pause mode)
+7. **Adaptive Refresh**: Scheduler adjusts interval based on quota level
+8. **Display Update**: Tray title (with trends) + tooltip + icon updated
+9. **Popup Resize**: Window auto-fits to content height
+10. **Auto-refresh**: Scheduler triggers at configured/adaptive interval
 
 ## API Integration
 
@@ -147,9 +198,11 @@ Credentials stored under `Claude Code-credentials`:
 
 | Level | Utilization | Icon Color | Notification |
 |-------|-------------|------------|--------------|
-| Normal | 0-69% | Green | None |
-| Warning | 70-89% | Orange | Warning alert |
-| Critical | 90-100% | Red | Critical alert |
+| Normal | Below warning threshold | Green | None |
+| Warning | At/above warning threshold | Orange | Warning alert |
+| Critical | At/above critical threshold | Red | Critical alert |
+
+*Thresholds are customizable in Settings (default: warning=70%, critical=90%)*
 
 ## IPC Channels
 
@@ -164,14 +217,25 @@ Credentials stored under `Claude Code-credentials`:
 | `set-refresh-interval` | renderer → main | Update refresh rate |
 | `set-launch-at-login` | renderer → main | Update startup setting |
 | `set-notifications-enabled` | renderer → main | Toggle notifications |
+| `get-thresholds` | renderer → main | Get warning/critical thresholds |
+| `set-warning-threshold` | renderer → main | Update warning threshold |
+| `set-critical-threshold` | renderer → main | Update critical threshold |
+| `set-adaptive-refresh` | renderer → main | Toggle adaptive refresh |
+| `set-show-time-to-critical` | renderer → main | Toggle time-to-critical display |
 | `get-history` | renderer → main | Get usage history |
 | `get-history-chart-data` | renderer → main | Get chart-ready data |
 | `get-history-stats` | renderer → main | Get statistics |
 | `clear-history` | renderer → main | Clear history data |
+| `get-trend` | renderer → main | Get trend data (30min lookback) |
+| `get-time-to-critical` | renderer → main | Get time estimate to critical |
+| `pause-monitoring` | renderer → main | Pause with optional duration |
+| `resume-monitoring` | renderer → main | Resume monitoring |
+| `get-pause-status` | renderer → main | Get pause state |
 | `check-for-updates` | renderer → main | Check for app updates |
 | `get-update-status` | renderer → main | Get update state |
 | `install-update` | renderer → main | Install pending update |
 | `get-log-path` | renderer → main | Get log file location |
+| `popup-content-height` | renderer → main | Report popup height for auto-fit |
 
 ## Settings (electron-store)
 
@@ -180,7 +244,11 @@ Credentials stored under `Claude Code-credentials`:
   refreshInterval: number       // seconds, default: 60
   launchAtLogin: boolean        // default: false
   notificationsEnabled: boolean // default: true
-  displayMode: 'standard' | 'detailed' | 'compact' // default: 'standard'
+  warningThreshold: number      // 50-99, default: 70
+  criticalThreshold: number     // 50-99, default: 90
+  adaptiveRefresh: boolean      // default: true
+  showTimeToCritical: boolean   // default: true
+  displayMode: 'standard' | 'detailed' | 'compact' | 'minimal' | 'time-remaining' // default: 'standard'
 }
 ```
 
