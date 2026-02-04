@@ -59,6 +59,11 @@ const api = {
   getQuota: (): Promise<QuotaInfo | null> => ipcRenderer.invoke('get-quota'),
   refreshQuota: (): Promise<QuotaInfo | null> => ipcRenderer.invoke('refresh-quota'),
   getCachedQuota: (): Promise<QuotaInfo | null> => ipcRenderer.invoke('get-cached-quota'),
+  onQuotaUpdated: (callback: (quota: QuotaInfo) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, quota: QuotaInfo): void => callback(quota)
+    ipcRenderer.on('quota-updated', handler)
+    return () => ipcRenderer.removeListener('quota-updated', handler)
+  },
 
   // Credentials
   hasCredentials: (): Promise<boolean> => ipcRenderer.invoke('has-credentials'),

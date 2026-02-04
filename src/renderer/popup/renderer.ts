@@ -182,5 +182,11 @@ async function refreshQuota(): Promise<void> {
 // Event listeners
 refreshBtn.addEventListener('click', refreshQuota)
 
+// Listen for quota updates from main process (triggered by tray icon click)
+window.claudeBar.onQuotaUpdated(async (quota) => {
+  updateQuotaDisplay(quota)
+  await loadHistoryStats()
+})
+
 // Initial load
 loadQuota()

@@ -3,6 +3,7 @@ import { join } from 'path'
 import { quotaService } from './services/quota-api'
 import { schedulerService } from './services/scheduler'
 import { logger } from './services/logger'
+import { windowManager } from './windows'
 import Store from 'electron-store'
 
 type DisplayMode = 'standard' | 'detailed' | 'compact'
@@ -73,6 +74,11 @@ export class TrayManager {
       this.updateTitle()
       this.updateIcon()
       this.updateTooltip()
+      // Send updated quota to popup window
+      const quota = quotaService.getCachedQuota()
+      if (quota) {
+        windowManager.sendToPopup('quota-updated', quota)
+      }
     })
 
     logger.info('Tray created')

@@ -236,6 +236,12 @@ export class WindowManager {
       this.settingsWindow.close()
     }
   }
+
+  sendToPopup(channel: string, data: unknown): void {
+    if (this.popupWindow && !this.popupWindow.isDestroyed()) {
+      this.popupWindow.webContents.send(channel, data)
+    }
+  }
 }
 
 export const windowManager = new WindowManager()
