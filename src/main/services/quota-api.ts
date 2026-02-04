@@ -45,8 +45,8 @@ export class QuotaService {
   private cachedQuota: QuotaInfo | null = null
   private lastFetchTime: number = 0
   private minFetchInterval = 30000 // 30 seconds minimum between fetches
-  private previousFiveHourReset: Date | null = null
-  private previousSevenDayReset: Date | null = null
+  private previousFiveHourUtilization: number | null = null
+  private previousSevenDayUtilization: number | null = null
 
   async fetchQuota(forceRefresh = false): Promise<QuotaInfo | null> {
     // Check cache
@@ -68,25 +68,29 @@ export class QuotaService {
 
       const data = (await response.json()) as UsageResponse
 
-      // Check for quota resets
       const newFiveHourReset = new Date(data.five_hour.resets_at)
       const newSevenDayReset = new Date(data.seven_day.resets_at)
 
+      // Check for quota resets - detect when utilization drops significantly (>30%)
+      // This indicates the rolling window has moved past high-usage periods
+      const RESET_THRESHOLD = 30
       if (
-        this.previousFiveHourReset &&
-        newFiveHourReset.getTime() > this.previousFiveHourReset.getTime()
+        this.previousFiveHourUtilization !== null &&
+        this.previousFiveHourUtilization >= 50 &&
+        data.five_hour.utilization < this.previousFiveHourUtilization - RESET_THRESHOLD
       ) {
         notificationService.notifyQuotaReset('fiveHour')
       }
       if (
-        this.previousSevenDayReset &&
-        newSevenDayReset.getTime() > this.previousSevenDayReset.getTime()
+        this.previousSevenDayUtilization !== null &&
+        this.previousSevenDayUtilization >= 50 &&
+        data.seven_day.utilization < this.previousSevenDayUtilization - RESET_THRESHOLD
       ) {
         notificationService.notifyQuotaReset('sevenDay')
       }
 
-      this.previousFiveHourReset = newFiveHourReset
-      this.previousSevenDayReset = newSevenDayReset
+      this.previousFiveHourUtilization = data.five_hour.utilization
+      this.previousSevenDayUtilization = data.seven_day.utilization
 
       this.cachedQuota = {
         fiveHour: {
