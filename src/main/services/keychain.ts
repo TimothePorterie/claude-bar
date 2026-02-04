@@ -48,8 +48,12 @@ function safeJsonParse(jsonStr: string): Record<string, unknown> | null {
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
-    // Check for prototype pollution attempts
-    if ('__proto__' in parsed || 'constructor' in parsed || 'prototype' in parsed) {
+    // Check for prototype pollution attempts (only own properties, not inherited)
+    if (
+      Object.hasOwn(parsed, '__proto__') ||
+      Object.hasOwn(parsed, 'constructor') ||
+      Object.hasOwn(parsed, 'prototype')
+    ) {
       logger.warn('Potential prototype pollution attempt detected in JSON')
       return null
     }
