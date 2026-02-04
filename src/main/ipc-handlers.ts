@@ -144,10 +144,15 @@ export function setupIpcHandlers(): void {
 
     try {
       store.set('launchAtLogin', enabled)
-      app.setLoginItemSettings({
-        openAtLogin: enabled,
-        openAsHidden: true
-      })
+      // Only set login item in production (requires signed app on macOS)
+      if (app.isPackaged) {
+        app.setLoginItemSettings({
+          openAtLogin: enabled,
+          openAsHidden: true
+        })
+      } else {
+        logger.debug('Skipping setLoginItemSettings in development mode')
+      }
       logger.info(`Launch at login: ${enabled}`)
       return true
     } catch (error) {
@@ -314,7 +319,8 @@ export function loadSettings(): void {
     }
 
     const launchAtLogin = store.get('launchAtLogin')
-    if (isValidBoolean(launchAtLogin)) {
+    if (isValidBoolean(launchAtLogin) && app.isPackaged) {
+      // Only set login item in production (requires signed app on macOS)
       app.setLoginItemSettings({
         openAtLogin: launchAtLogin,
         openAsHidden: true
