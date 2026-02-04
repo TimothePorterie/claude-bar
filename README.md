@@ -22,7 +22,9 @@
 - **Menu Bar Display** — Shows your current quota usage right in the menu bar
 - **Detailed Popup** — Click to see session (5h) and weekly (7d) quotas with progress bars
 - **Smart Color Coding** — Progress bars change from green → orange → red as usage increases
-- **Auto Refresh** — Configurable refresh interval (30s to 10min)
+- **Auto Refresh** — Configurable refresh interval (30s to 10min) with adaptive mode
+- **Visual Feedback** — Pulse animation and toast notification on successful refresh
+- **Rich Tooltips** — Hover for detailed info including trends and time estimates
 - **Dark Mode** — Seamlessly adapts to your macOS appearance
 - **Lightweight** — Runs quietly in the background with minimal resource usage
 - **Native Feel** — Uses macOS vibrancy effects for a native look
@@ -30,16 +32,34 @@
 ### Display Modes
 Choose your preferred menu bar format (right-click → Display Mode):
 - **Standard**: `45% / 32%`
-- **Detailed**: `5h: 45% | 7d: 32%`
+- **Detailed**: `5h: 45%↑ | 7d: 32%→` (with trend indicators)
 - **Compact**: `45%` (shows highest usage only)
+- **Time Remaining**: `4h 30m` (time until session reset)
+- **Minimal**: Icon only, no text
 
 ### Usage Statistics
 - Track quota usage over time with persistent storage
 - 24-hour statistics: average and peak values
+- **Trend indicators**: ↑ rising, ↓ falling, → stable
+- **Time to critical**: Estimates when you'll reach critical level
+- **Reset progress bar**: Visual indicator of time elapsed in current period
+
+### Pause Mode
+Right-click → Pause to temporarily stop monitoring:
+- Pause for 30 minutes, 1 hour, 2 hours, or indefinitely
+- Notifications are suppressed while paused
+- Menu bar shows pause status with remaining time
+
+### Adaptive Refresh
+When enabled (default), refresh rate increases automatically:
+- **Normal**: Uses your configured interval
+- **Warning (70%+)**: Refreshes 2x faster
+- **Critical (90%+)**: Refreshes 4x faster
 
 ### Notifications
-- Warning alert at 70% utilization
-- Critical alert at 90% utilization
+- **Customizable thresholds**: Set your own warning and critical levels (50-99%)
+- Warning alert at configurable threshold (default 70%)
+- Critical alert at configurable threshold (default 90%)
 - Quota reset notifications
 - Token refresh failure alerts
 - Toggle on/off in Settings
@@ -113,17 +133,22 @@ The menu bar shows two percentages:
 
 | Usage | Color | Meaning |
 |-------|-------|---------|
-| 0-69% | 🟢 Green | Normal usage |
-| 70-89% | 🟠 Orange | Approaching limit |
-| 90-100% | 🔴 Red | Near or at limit |
+| Below warning | 🟢 Green | Normal usage |
+| Warning level | 🟠 Orange | Approaching limit |
+| Critical level | 🔴 Red | Near or at limit |
+
+*Default thresholds: Warning at 70%, Critical at 90% (customizable in Settings)*
 
 ### Settings
 
 Access settings via right-click → Settings:
 
 - **Refresh Interval**: How often to fetch new quota data (30s - 10min)
+- **Adaptive Refresh**: Automatically increase refresh rate at warning/critical levels
 - **Launch at Login**: Automatically start Claude Bar when you log in
 - **Notifications**: Enable/disable system notifications for quota alerts
+- **Alert Thresholds**: Customize warning (default 70%) and critical (default 90%) levels
+- **Show "Est. critical" prediction**: Toggle the time-to-critical estimation display
 - **Updates**: Check for updates and install with one click
 
 ## How It Works

@@ -1,4 +1,4 @@
-import { BrowserWindow, screen, app, session } from 'electron'
+import { BrowserWindow, screen, app, session, ipcMain } from 'electron'
 import { join } from 'path'
 import { trayManager } from './tray'
 import { logger } from './services/logger'
@@ -34,14 +34,59 @@ export class WindowManager {
   private popupWindow: BrowserWindow | null = null
   private settingsWindow: BrowserWindow | null = null
   private securityInitialized = false
+  private ipcSetup = false
 
   constructor() {
     // Defer security setup until app is ready
     if (app.isReady()) {
       this.setupSecurityHeaders()
+      this.setupIpcHandlers()
     } else {
-      app.once('ready', () => this.setupSecurityHeaders())
+      app.once('ready', () => {
+        this.setupSecurityHeaders()
+        this.setupIpcHandlers()
+      })
     }
+  }
+
+  private setupIpcHandlers(): void {
+    if (this.ipcSetup) return
+    this.ipcSetup = true
+
+    // Handle content height reports from popup
+    ipcMain.on('popup-content-height', (_event, height: number) => {
+      if (this.popupWindow && !this.popupWindow.isDestroyed()) {
+        const popupWidth = 320
+        const maxHeight = 600
+        const minHeight = 200
+        const newHeight = Math.min(maxHeight, Math.max(minHeight, Math.ceil(height)))
+
+        // Get current position
+        const [x, y] = this.popupWindow.getPosition()
+
+        // Resize the window
+        this.popupWindow.setSize(popupWidth, newHeight)
+
+        // Re-check bounds after resize
+        const display = screen.getDisplayNearestPoint({ x, y })
+        const displayBounds = display.workArea
+
+        // Ensure window stays within screen bounds
+        let newX = x
+        let newY = y
+
+        if (newX + popupWidth > displayBounds.x + displayBounds.width) {
+          newX = displayBounds.x + displayBounds.width - popupWidth - 10
+        }
+        if (newY + newHeight > displayBounds.y + displayBounds.height) {
+          newY = displayBounds.y + displayBounds.height - newHeight - 10
+        }
+
+        if (newX !== x || newY !== y) {
+          this.popupWindow.setPosition(newX, newY)
+        }
+      }
+    })
   }
 
   private setupSecurityHeaders(): void {
@@ -94,7 +139,7 @@ export class WindowManager {
     })
 
     const popupWidth = 320
-    const popupHeight = 480
+    const popupHeight = 300 // Initial height, will be adjusted based on content
 
     // Position popup below the tray icon
     let x = trayBounds ? Math.round(trayBounds.x - popupWidth / 2 + trayBounds.width / 2) : 100

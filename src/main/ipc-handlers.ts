@@ -2,7 +2,7 @@ import { ipcMain, app } from 'electron'
 import { keychainService } from './services/keychain'
 import { quotaService, QuotaInfo } from './services/quota-api'
 import { schedulerService } from './services/scheduler'
-import { historyService, HistoryEntry } from './services/history'
+import { historyService, HistoryEntry, TrendData, TimeToThreshold } from './services/history'
 import { notificationService } from './services/notifications'
 import { updaterService } from './services/updater'
 import { logger } from './services/logger'
@@ -12,6 +12,10 @@ interface StoreSchema {
   refreshInterval: number
   launchAtLogin: boolean
   notificationsEnabled: boolean
+  warningThreshold: number
+  criticalThreshold: number
+  adaptiveRefresh: boolean
+  showTimeToCritical: boolean
 }
 
 // Input validation helpers
@@ -30,11 +34,19 @@ function isValidHistoryHours(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= MAX_HISTORY_HOURS
 }
 
+function isValidThreshold(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 50 && value <= 99
+}
+
 const store = new Store<StoreSchema>({
   defaults: {
     refreshInterval: 60,
     launchAtLogin: false,
-    notificationsEnabled: true
+    notificationsEnabled: true,
+    warningThreshold: 70,
+    criticalThreshold: 90,
+    adaptiveRefresh: true,
+    showTimeToCritical: true
   }
 })
 
@@ -105,14 +117,22 @@ export function setupIpcHandlers(): void {
       return {
         refreshInterval: store.get('refreshInterval'),
         launchAtLogin: store.get('launchAtLogin'),
-        notificationsEnabled: store.get('notificationsEnabled')
+        notificationsEnabled: store.get('notificationsEnabled'),
+        warningThreshold: store.get('warningThreshold'),
+        criticalThreshold: store.get('criticalThreshold'),
+        adaptiveRefresh: store.get('adaptiveRefresh'),
+        showTimeToCritical: store.get('showTimeToCritical')
       }
     } catch (error) {
       logger.error('IPC get-settings error:', error)
       return {
         refreshInterval: 60,
         launchAtLogin: false,
-        notificationsEnabled: true
+        notificationsEnabled: true,
+        warningThreshold: 70,
+        criticalThreshold: 90,
+        adaptiveRefresh: true,
+        showTimeToCritical: true
       }
     }
   })
@@ -174,6 +194,95 @@ export function setupIpcHandlers(): void {
       return true
     } catch (error) {
       logger.error('IPC set-notifications-enabled error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('get-thresholds', () => {
+    try {
+      return {
+        warning: store.get('warningThreshold'),
+        critical: store.get('criticalThreshold')
+      }
+    } catch (error) {
+      logger.error('IPC get-thresholds error:', error)
+      return { warning: 70, critical: 90 }
+    }
+  })
+
+  ipcMain.handle('set-warning-threshold', (_event, threshold: unknown) => {
+    if (!isValidThreshold(threshold)) {
+      logger.warn(`Invalid warning threshold rejected: ${threshold}`)
+      return false
+    }
+
+    const criticalThreshold = store.get('criticalThreshold')
+    if (threshold >= criticalThreshold) {
+      logger.warn(`Warning threshold (${threshold}) must be less than critical (${criticalThreshold})`)
+      return false
+    }
+
+    try {
+      store.set('warningThreshold', threshold)
+      notificationService.setThresholds(threshold, criticalThreshold)
+      logger.info(`Warning threshold set to ${threshold}%`)
+      return true
+    } catch (error) {
+      logger.error('IPC set-warning-threshold error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('set-critical-threshold', (_event, threshold: unknown) => {
+    if (!isValidThreshold(threshold)) {
+      logger.warn(`Invalid critical threshold rejected: ${threshold}`)
+      return false
+    }
+
+    const warningThreshold = store.get('warningThreshold')
+    if (threshold <= warningThreshold) {
+      logger.warn(`Critical threshold (${threshold}) must be greater than warning (${warningThreshold})`)
+      return false
+    }
+
+    try {
+      store.set('criticalThreshold', threshold)
+      notificationService.setThresholds(warningThreshold, threshold)
+      logger.info(`Critical threshold set to ${threshold}%`)
+      return true
+    } catch (error) {
+      logger.error('IPC set-critical-threshold error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('set-adaptive-refresh', (_event, enabled: unknown) => {
+    if (!isValidBoolean(enabled)) {
+      logger.warn(`Invalid adaptive-refresh value rejected: ${enabled}`)
+      return false
+    }
+
+    try {
+      store.set('adaptiveRefresh', enabled)
+      schedulerService.setAdaptiveEnabled(enabled)
+      return true
+    } catch (error) {
+      logger.error('IPC set-adaptive-refresh error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('set-show-time-to-critical', (_event, enabled: unknown) => {
+    if (!isValidBoolean(enabled)) {
+      logger.warn(`Invalid show-time-to-critical value rejected: ${enabled}`)
+      return false
+    }
+
+    try {
+      store.set('showTimeToCritical', enabled)
+      return true
+    } catch (error) {
+      logger.error('IPC set-show-time-to-critical error:', error)
       return false
     }
   })
@@ -256,6 +365,58 @@ export function setupIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('get-trend', (_event, lookbackMinutes?: unknown): TrendData | null => {
+    try {
+      const minutes = typeof lookbackMinutes === 'number' && lookbackMinutes > 0 ? lookbackMinutes : 30
+      return historyService.getTrend(minutes)
+    } catch (error) {
+      logger.error('IPC get-trend error:', error)
+      return null
+    }
+  })
+
+  ipcMain.handle('pause-monitoring', (_event, durationMinutes?: unknown) => {
+    try {
+      const duration = typeof durationMinutes === 'number' && durationMinutes > 0 ? durationMinutes : undefined
+      schedulerService.pause(duration)
+      notificationService.setPaused(true)
+      return true
+    } catch (error) {
+      logger.error('IPC pause-monitoring error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('resume-monitoring', () => {
+    try {
+      schedulerService.resume()
+      notificationService.setPaused(false)
+      return true
+    } catch (error) {
+      logger.error('IPC resume-monitoring error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('get-pause-status', () => {
+    try {
+      return schedulerService.getPauseStatus()
+    } catch (error) {
+      logger.error('IPC get-pause-status error:', error)
+      return { paused: false, resumeAt: null, remainingMs: null }
+    }
+  })
+
+  ipcMain.handle('get-time-to-critical', (): TimeToThreshold | null => {
+    try {
+      const criticalThreshold = store.get('criticalThreshold')
+      return historyService.estimateTimeToThreshold(criticalThreshold)
+    } catch (error) {
+      logger.error('IPC get-time-to-critical error:', error)
+      return null
+    }
+  })
+
   // Updater handlers
   ipcMain.handle('check-for-updates', async () => {
     try {
@@ -330,6 +491,19 @@ export function loadSettings(): void {
     const notificationsEnabled = store.get('notificationsEnabled')
     if (isValidBoolean(notificationsEnabled)) {
       notificationService.setEnabled(notificationsEnabled)
+    }
+
+    // Load threshold settings
+    const warningThreshold = store.get('warningThreshold')
+    const criticalThreshold = store.get('criticalThreshold')
+    if (isValidThreshold(warningThreshold) && isValidThreshold(criticalThreshold)) {
+      notificationService.setThresholds(warningThreshold, criticalThreshold)
+    }
+
+    // Load adaptive refresh setting
+    const adaptiveRefresh = store.get('adaptiveRefresh')
+    if (isValidBoolean(adaptiveRefresh)) {
+      schedulerService.setAdaptiveEnabled(adaptiveRefresh)
     }
 
     logger.info('Settings loaded')

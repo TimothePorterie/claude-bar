@@ -43,6 +43,13 @@
             <option value="600">10 minutes</option>
           </select>
         </div>
+        <div class="setting-row">
+          <label for="adaptiveRefresh">
+            <input type="checkbox" id="adaptiveRefresh" checked />
+            Adaptive refresh
+          </label>
+        </div>
+        <p class="setting-description">When enabled, refresh faster at warning (2x) and critical (4x) levels to keep you informed.</p>
       </div>
 
       <!-- Notifications -->
@@ -54,7 +61,33 @@
             Enable quota notifications
           </label>
         </div>
-        <p class="setting-description">Get notified when your quota reaches warning (70%) or critical (90%) levels, and when it resets.</p>
+        <p class="setting-description">Get notified when your quota reaches warning or critical levels, and when it resets.</p>
+      </div>
+
+      <!-- Thresholds -->
+      <div class="section">
+        <h2>Alert Thresholds</h2>
+        <div class="threshold-setting">
+          <div class="threshold-header">
+            <label for="warningThreshold">Warning level</label>
+            <span class="threshold-value" id="warningValue">70%</span>
+          </div>
+          <input type="range" id="warningThreshold" min="50" max="89" value="70" class="threshold-slider warning" />
+        </div>
+        <div class="threshold-setting">
+          <div class="threshold-header">
+            <label for="criticalThreshold">Critical level</label>
+            <span class="threshold-value" id="criticalValue">90%</span>
+          </div>
+          <input type="range" id="criticalThreshold" min="60" max="99" value="90" class="threshold-slider critical" />
+        </div>
+        <p class="setting-description">Set when you want to be notified about quota usage. Warning must be less than critical.</p>
+        <div class="setting-row" style="margin-top: 12px;">
+          <label for="showTimeToCritical">
+            <input type="checkbox" id="showTimeToCritical" checked />
+            Show "Est. critical" prediction
+          </label>
+        </div>
       </div>
 
       <!-- Startup -->

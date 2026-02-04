@@ -2,6 +2,7 @@ import { keychainService, Credentials } from './keychain'
 import { logger } from './logger'
 import { notificationService } from './notifications'
 import { historyService } from './history'
+import { schedulerService } from './scheduler'
 
 export interface QuotaData {
   utilization: number
@@ -13,18 +14,29 @@ export interface UsageResponse {
   seven_day: QuotaData
 }
 
+export type QuotaErrorType = 'network' | 'auth' | 'rate_limit' | 'server' | 'unknown'
+
+export interface QuotaError {
+  type: QuotaErrorType
+  message: string
+  retryable: boolean
+}
+
 export interface QuotaInfo {
   fiveHour: {
     utilization: number
     resetsAt: Date
     resetsIn: string
+    resetProgress: number // 0-100, percentage of time elapsed in the period
   }
   sevenDay: {
     utilization: number
     resetsAt: Date
     resetsIn: string
+    resetProgress: number // 0-100, percentage of time elapsed in the period
   }
   lastUpdated: Date
+  error?: QuotaError
 }
 
 interface RetryConfig {
@@ -44,6 +56,8 @@ export class QuotaService {
 
   private cachedQuota: QuotaInfo | null = null
   private lastFetchTime: number = 0
+  private lastSuccessfulFetch: number = 0
+  private lastError: QuotaError | null = null
   private minFetchInterval = 30000 // 30 seconds minimum between fetches
   private previousFiveHourUtilization: number | null = null
   private previousSevenDayUtilization: number | null = null
@@ -96,23 +110,31 @@ export class QuotaService {
         fiveHour: {
           utilization: data.five_hour.utilization,
           resetsAt: newFiveHourReset,
-          resetsIn: this.formatTimeUntil(newFiveHourReset)
+          resetsIn: this.formatTimeUntil(newFiveHourReset),
+          resetProgress: this.calculateResetProgress(newFiveHourReset, 5)
         },
         sevenDay: {
           utilization: data.seven_day.utilization,
           resetsAt: newSevenDayReset,
-          resetsIn: this.formatTimeUntil(newSevenDayReset)
+          resetsIn: this.formatTimeUntil(newSevenDayReset),
+          resetProgress: this.calculateResetProgress(newSevenDayReset, 7 * 24)
         },
         lastUpdated: new Date()
       }
 
       this.lastFetchTime = Date.now()
+      this.lastSuccessfulFetch = Date.now()
+      this.lastError = null
 
       // Record in history
       historyService.addEntry(data.five_hour.utilization, data.seven_day.utilization)
 
       // Check and send notifications
       notificationService.checkAndNotify(data.five_hour.utilization, data.seven_day.utilization)
+
+      // Update scheduler with current quota level for adaptive refresh
+      const level = this.getQuotaLevel()
+      schedulerService.updateQuotaLevel(level)
 
       logger.info(
         `Quota fetched: 5h=${Math.round(data.five_hour.utilization)}%, 7d=${Math.round(data.seven_day.utilization)}%`
@@ -121,8 +143,44 @@ export class QuotaService {
       return this.cachedQuota
     } catch (error) {
       logger.error('Failed to fetch quota:', error)
+      this.lastError = this.classifyError(error)
+
+      // Return cached quota with error attached if available
+      if (this.cachedQuota) {
+        return { ...this.cachedQuota, error: this.lastError }
+      }
       return null
     }
+  }
+
+  private classifyError(error: unknown): QuotaError {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+
+    if (errorMessage.includes('network') || errorMessage.includes('ENOTFOUND') || errorMessage.includes('ECONNREFUSED')) {
+      return { type: 'network', message: 'Unable to connect. Check your internet connection.', retryable: true }
+    }
+
+    if (errorMessage.includes('401') || errorMessage.includes('authentication') || errorMessage.includes('token')) {
+      return { type: 'auth', message: 'Authentication failed. Please run "claude login" again.', retryable: false }
+    }
+
+    if (errorMessage.includes('429') || errorMessage.includes('rate')) {
+      return { type: 'rate_limit', message: 'Rate limited. Will retry automatically.', retryable: true }
+    }
+
+    if (errorMessage.includes('5')) {
+      return { type: 'server', message: 'Server error. Will retry automatically.', retryable: true }
+    }
+
+    return { type: 'unknown', message: 'An unexpected error occurred.', retryable: true }
+  }
+
+  getLastError(): QuotaError | null {
+    return this.lastError
+  }
+
+  getLastSuccessfulFetch(): number {
+    return this.lastSuccessfulFetch
   }
 
   private async fetchWithRetry(
@@ -217,6 +275,19 @@ export class QuotaService {
     return `${diffMinutes}m`
   }
 
+  private calculateResetProgress(resetsAt: Date, periodHours: number): number {
+    const now = Date.now()
+    const resetTime = resetsAt.getTime()
+    const periodMs = periodHours * 60 * 60 * 1000
+    const startTime = resetTime - periodMs
+
+    // Calculate how much of the period has elapsed
+    const elapsed = now - startTime
+    const progress = Math.max(0, Math.min(100, (elapsed / periodMs) * 100))
+
+    return Math.round(progress)
+  }
+
   getCachedQuota(): QuotaInfo | null {
     return this.cachedQuota
   }
@@ -248,6 +319,15 @@ export class QuotaService {
     return `5h: ${fiveHour}% | 7d: ${sevenDay}%`
   }
 
+  getTimeRemainingTitle(): string {
+    if (!this.cachedQuota) {
+      return '--'
+    }
+
+    // Show time until session (5-hour) quota resets
+    return this.cachedQuota.fiveHour.resetsIn
+  }
+
   getQuotaLevel(): 'normal' | 'warning' | 'critical' {
     if (!this.cachedQuota) {
       return 'normal'
@@ -258,15 +338,8 @@ export class QuotaService {
       this.cachedQuota.sevenDay.utilization
     )
 
-    if (maxUtilization >= 90) {
-      return 'critical'
-    }
-
-    if (maxUtilization >= 70) {
-      return 'warning'
-    }
-
-    return 'normal'
+    // Use notification service's getLevel to respect user's threshold settings
+    return notificationService.getLevel(maxUtilization)
   }
 
   getEnhancedTooltip(): string {
@@ -279,13 +352,68 @@ export class QuotaService {
     const fiveHourReset = this.cachedQuota.fiveHour.resetsIn
     const sevenDayReset = this.cachedQuota.sevenDay.resetsIn
 
+    // Get trend data
+    const trend = historyService.getTrend(30)
+    const fiveHourTrend = trend ? this.getTrendSymbol(trend.fiveHour.direction) : ''
+    const sevenDayTrend = trend ? this.getTrendSymbol(trend.sevenDay.direction) : ''
+
     const lines = [
-      `Session: ${fiveHour}% (resets in ${fiveHourReset})`,
-      `Weekly: ${sevenDay}% (resets in ${sevenDayReset})`,
-      `Last updated: ${this.cachedQuota.lastUpdated.toLocaleTimeString()}`
+      `Session: ${fiveHour}%${fiveHourTrend} (resets in ${fiveHourReset})`,
+      `Weekly: ${sevenDay}%${sevenDayTrend} (resets in ${sevenDayReset})`
     ]
 
+    // Add time to critical if applicable
+    const thresholds = notificationService.getThresholds()
+    const ttc = historyService.estimateTimeToThreshold(thresholds.critical)
+    if (ttc) {
+      const estimates = [ttc.fiveHour, ttc.sevenDay].filter((v): v is number => v !== null)
+      if (estimates.length > 0) {
+        const minTime = Math.min(...estimates)
+        lines.push(`Est. critical: ~${this.formatHoursShort(minTime)}`)
+      }
+    }
+
+    // Add next refresh info
+    const nextRefresh = schedulerService.getNextRefreshTime()
+    const secondsUntilRefresh = Math.max(0, Math.round((nextRefresh.getTime() - Date.now()) / 1000))
+    if (!schedulerService.isPaused()) {
+      lines.push(`Next refresh: ${secondsUntilRefresh}s`)
+    } else {
+      const pauseStatus = schedulerService.getPauseStatus()
+      if (pauseStatus.remainingMs) {
+        const minutes = Math.ceil(pauseStatus.remainingMs / 60000)
+        lines.push(`Paused (${minutes}m remaining)`)
+      } else {
+        lines.push('Paused')
+      }
+    }
+
+    lines.push(`Last updated: ${this.cachedQuota.lastUpdated.toLocaleTimeString()}`)
+
     return lines.join('\n')
+  }
+
+  private getTrendSymbol(direction: 'up' | 'down' | 'stable'): string {
+    switch (direction) {
+      case 'up':
+        return '↑'
+      case 'down':
+        return '↓'
+      case 'stable':
+        return '→'
+    }
+  }
+
+  private formatHoursShort(hours: number): string {
+    if (hours < 1) {
+      return `${Math.round(hours * 60)}m`
+    }
+    const h = Math.floor(hours)
+    const m = Math.round((hours - h) * 60)
+    if (m === 0) {
+      return `${h}h`
+    }
+    return `${h}h ${m}m`
   }
 }
 

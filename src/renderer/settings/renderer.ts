@@ -6,8 +6,14 @@ const statusText = document.getElementById('statusText') as HTMLElement
 const statusEmail = document.getElementById('statusEmail') as HTMLElement
 const notConnectedHelp = document.getElementById('notConnectedHelp') as HTMLElement
 const refreshInterval = document.getElementById('refreshInterval') as HTMLSelectElement
+const adaptiveRefresh = document.getElementById('adaptiveRefresh') as HTMLInputElement
 const notificationsEnabled = document.getElementById('notificationsEnabled') as HTMLInputElement
 const launchAtLogin = document.getElementById('launchAtLogin') as HTMLInputElement
+const warningThreshold = document.getElementById('warningThreshold') as HTMLInputElement
+const warningValue = document.getElementById('warningValue') as HTMLElement
+const criticalThreshold = document.getElementById('criticalThreshold') as HTMLInputElement
+const criticalValue = document.getElementById('criticalValue') as HTMLElement
+const showTimeToCritical = document.getElementById('showTimeToCritical') as HTMLInputElement
 const appVersion = document.getElementById('appVersion') as HTMLElement
 const updateText = document.getElementById('updateText') as HTMLElement
 const updateBtn = document.getElementById('updateBtn') as HTMLButtonElement
@@ -52,8 +58,24 @@ async function loadSettings(): Promise<void> {
     // Set notifications
     notificationsEnabled.checked = settings.notificationsEnabled
 
+    // Set adaptive refresh
+    adaptiveRefresh.checked = settings.adaptiveRefresh
+
     // Set launch at login
     launchAtLogin.checked = settings.launchAtLogin
+
+    // Set thresholds
+    warningThreshold.value = settings.warningThreshold.toString()
+    warningValue.textContent = `${settings.warningThreshold}%`
+    criticalThreshold.value = settings.criticalThreshold.toString()
+    criticalValue.textContent = `${settings.criticalThreshold}%`
+
+    // Update slider constraints
+    warningThreshold.max = (settings.criticalThreshold - 1).toString()
+    criticalThreshold.min = (settings.warningThreshold + 1).toString()
+
+    // Set show time to critical
+    showTimeToCritical.checked = settings.showTimeToCritical
   } catch (error) {
     console.error('Failed to load settings:', error)
   }
@@ -98,6 +120,14 @@ refreshInterval.addEventListener('change', async () => {
   }
 })
 
+adaptiveRefresh.addEventListener('change', async () => {
+  try {
+    await window.claudeBar.setAdaptiveRefresh(adaptiveRefresh.checked)
+  } catch (error) {
+    console.error('Failed to update adaptive refresh:', error)
+  }
+})
+
 notificationsEnabled.addEventListener('change', async () => {
   try {
     await window.claudeBar.setNotificationsEnabled(notificationsEnabled.checked)
@@ -119,6 +149,54 @@ updateBtn.addEventListener('click', async () => {
     await window.claudeBar.installUpdate()
   } catch (error) {
     console.error('Failed to install update:', error)
+  }
+})
+
+warningThreshold.addEventListener('input', () => {
+  const value = parseInt(warningThreshold.value, 10)
+  warningValue.textContent = `${value}%`
+  // Update critical threshold minimum
+  criticalThreshold.min = (value + 1).toString()
+  if (parseInt(criticalThreshold.value, 10) <= value) {
+    criticalThreshold.value = (value + 1).toString()
+    criticalValue.textContent = `${value + 1}%`
+  }
+})
+
+warningThreshold.addEventListener('change', async () => {
+  const value = parseInt(warningThreshold.value, 10)
+  try {
+    await window.claudeBar.setWarningThreshold(value)
+  } catch (error) {
+    console.error('Failed to update warning threshold:', error)
+  }
+})
+
+criticalThreshold.addEventListener('input', () => {
+  const value = parseInt(criticalThreshold.value, 10)
+  criticalValue.textContent = `${value}%`
+  // Update warning threshold maximum
+  warningThreshold.max = (value - 1).toString()
+  if (parseInt(warningThreshold.value, 10) >= value) {
+    warningThreshold.value = (value - 1).toString()
+    warningValue.textContent = `${value - 1}%`
+  }
+})
+
+criticalThreshold.addEventListener('change', async () => {
+  const value = parseInt(criticalThreshold.value, 10)
+  try {
+    await window.claudeBar.setCriticalThreshold(value)
+  } catch (error) {
+    console.error('Failed to update critical threshold:', error)
+  }
+})
+
+showTimeToCritical.addEventListener('change', async () => {
+  try {
+    await window.claudeBar.setShowTimeToCritical(showTimeToCritical.checked)
+  } catch (error) {
+    console.error('Failed to update show time to critical:', error)
   }
 })
 

@@ -12,6 +12,11 @@ interface NotificationState {
   }
 }
 
+interface Thresholds {
+  warning: number
+  critical: number
+}
+
 export class NotificationService {
   private state: NotificationState = {
     lastFiveHourLevel: 'normal',
@@ -22,6 +27,11 @@ export class NotificationService {
     }
   }
   private enabled = true
+  private paused = false
+  private thresholds: Thresholds = {
+    warning: 70,
+    critical: 90
+  }
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled
@@ -32,14 +42,32 @@ export class NotificationService {
     return this.enabled
   }
 
-  private getLevel(utilization: number): QuotaLevel {
-    if (utilization >= 90) return 'critical'
-    if (utilization >= 70) return 'warning'
+  setPaused(paused: boolean): void {
+    this.paused = paused
+    logger.info(`Notifications ${paused ? 'paused' : 'resumed'}`)
+  }
+
+  isPaused(): boolean {
+    return this.paused
+  }
+
+  setThresholds(warning: number, critical: number): void {
+    this.thresholds = { warning, critical }
+    logger.info(`Notification thresholds set: warning=${warning}%, critical=${critical}%`)
+  }
+
+  getThresholds(): Thresholds {
+    return { ...this.thresholds }
+  }
+
+  getLevel(utilization: number): QuotaLevel {
+    if (utilization >= this.thresholds.critical) return 'critical'
+    if (utilization >= this.thresholds.warning) return 'warning'
     return 'normal'
   }
 
   private showNotification(title: string, body: string, urgency: 'low' | 'normal' | 'critical' = 'normal'): void {
-    if (!this.enabled) return
+    if (!this.enabled || this.paused) return
 
     try {
       const notification = new Notification({
@@ -65,13 +93,13 @@ export class NotificationService {
       if (fiveHourLevel === 'warning' && this.state.lastFiveHourLevel === 'normal') {
         this.showNotification(
           'Session Quota Warning',
-          `Your 5-hour quota is at ${Math.round(fiveHourUtilization)}%. Consider slowing down.`,
+          `Your 5-hour quota is at ${Math.round(fiveHourUtilization)}% (threshold: ${this.thresholds.warning}%). Consider slowing down.`,
           'normal'
         )
       } else if (fiveHourLevel === 'critical') {
         this.showNotification(
           'Session Quota Critical',
-          `Your 5-hour quota is at ${Math.round(fiveHourUtilization)}%! You may be rate limited soon.`,
+          `Your 5-hour quota is at ${Math.round(fiveHourUtilization)}% (threshold: ${this.thresholds.critical}%)! You may be rate limited soon.`,
           'critical'
         )
       }
@@ -83,13 +111,13 @@ export class NotificationService {
       if (sevenDayLevel === 'warning' && this.state.lastSevenDayLevel === 'normal') {
         this.showNotification(
           'Weekly Quota Warning',
-          `Your 7-day quota is at ${Math.round(sevenDayUtilization)}%. You have limited usage remaining this week.`,
+          `Your 7-day quota is at ${Math.round(sevenDayUtilization)}% (threshold: ${this.thresholds.warning}%). You have limited usage remaining this week.`,
           'normal'
         )
       } else if (sevenDayLevel === 'critical') {
         this.showNotification(
           'Weekly Quota Critical',
-          `Your 7-day quota is at ${Math.round(sevenDayUtilization)}%! Very limited usage remaining.`,
+          `Your 7-day quota is at ${Math.round(sevenDayUtilization)}% (threshold: ${this.thresholds.critical}%)! Very limited usage remaining.`,
           'critical'
         )
       }

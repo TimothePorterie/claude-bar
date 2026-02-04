@@ -1,12 +1,14 @@
 import { Tray, Menu, nativeImage, app } from 'electron'
 import { join } from 'path'
 import { quotaService } from './services/quota-api'
+import { historyService } from './services/history'
 import { schedulerService } from './services/scheduler'
+import { notificationService } from './services/notifications'
 import { logger } from './services/logger'
 import { windowManager } from './windows'
 import Store from 'electron-store'
 
-type DisplayMode = 'standard' | 'detailed' | 'compact'
+type DisplayMode = 'standard' | 'detailed' | 'compact' | 'minimal' | 'time-remaining'
 
 interface TraySettings {
   displayMode: DisplayMode
@@ -27,7 +29,7 @@ export class TrayManager {
     })
   }
 
-  private getIconPath(type: 'normal' | 'warning' | 'critical' = 'normal'): string {
+  private getIconPath(type: 'normal' | 'warning' | 'critical' | 'paused' = 'normal'): string {
     const basePath = app.isPackaged
       ? join(process.resourcesPath, 'assets')
       : join(__dirname, '../../assets')
@@ -37,6 +39,9 @@ export class TrayManager {
         return join(basePath, 'icon-warning.png')
       case 'critical':
         return join(basePath, 'icon-critical.png')
+      case 'paused':
+        // Use template icon for paused state (grayed out by macOS)
+        return join(basePath, 'iconTemplate.png')
       default:
         return join(basePath, 'iconTemplate.png')
     }
@@ -94,18 +99,47 @@ export class TrayManager {
     logger.info(`Display mode changed to: ${mode}`)
   }
 
+  private getTrendSymbol(direction: 'up' | 'down' | 'stable'): string {
+    switch (direction) {
+      case 'up':
+        return '↑'
+      case 'down':
+        return '↓'
+      case 'stable':
+        return '→'
+    }
+  }
+
   updateTitle(): void {
     if (!this.tray) return
+
+    // Show paused indicator if monitoring is paused
+    if (schedulerService.isPaused()) {
+      const pauseStatus = schedulerService.getPauseStatus()
+      if (pauseStatus.remainingMs) {
+        const minutes = Math.ceil(pauseStatus.remainingMs / 60000)
+        this.tray.setTitle(`⏸ ${minutes}m`)
+      } else {
+        this.tray.setTitle('⏸')
+      }
+      return
+    }
 
     const mode = this.getDisplayMode()
     let title: string
 
     switch (mode) {
       case 'detailed':
-        title = quotaService.getDetailedTitle()
+        title = this.getDetailedTitleWithTrend()
         break
       case 'compact':
         title = quotaService.getFormattedTitle(true)
+        break
+      case 'minimal':
+        title = '' // Icon only, no text
+        break
+      case 'time-remaining':
+        title = quotaService.getTimeRemainingTitle()
         break
       default:
         title = quotaService.getFormattedTitle(false)
@@ -114,8 +148,40 @@ export class TrayManager {
     this.tray.setTitle(title)
   }
 
+  private getDetailedTitleWithTrend(): string {
+    const baseTitle = quotaService.getDetailedTitle()
+    const trend = historyService.getTrend(30)
+
+    if (!trend) {
+      return baseTitle
+    }
+
+    // Parse the base title and add trend indicators
+    const fiveHourSymbol = this.getTrendSymbol(trend.fiveHour.direction)
+    const sevenDaySymbol = this.getTrendSymbol(trend.sevenDay.direction)
+
+    const quota = quotaService.getCachedQuota()
+    if (!quota) {
+      return baseTitle
+    }
+
+    const fiveHour = Math.round(quota.fiveHour.utilization)
+    const sevenDay = Math.round(quota.sevenDay.utilization)
+
+    return `5h: ${fiveHour}%${fiveHourSymbol} | 7d: ${sevenDay}%${sevenDaySymbol}`
+  }
+
   updateIcon(): void {
     if (!this.tray) return
+
+    // Use paused icon if monitoring is paused
+    if (schedulerService.isPaused()) {
+      const iconPath = this.getIconPath('paused')
+      const icon = nativeImage.createFromPath(iconPath)
+      icon.setTemplateImage(true)
+      this.tray.setImage(icon)
+      return
+    }
 
     const level = quotaService.getQuotaLevel()
     const iconPath = this.getIconPath(level)
@@ -136,13 +202,72 @@ export class TrayManager {
 
   private showContextMenu(): void {
     const currentMode = this.getDisplayMode()
+    const isPaused = schedulerService.isPaused()
+
+    const pauseSubmenu: Electron.MenuItemConstructorOptions[] = isPaused
+      ? [
+          {
+            label: 'Resume Monitoring',
+            click: () => {
+              schedulerService.resume()
+              notificationService.setPaused(false)
+              this.updateIcon()
+              this.updateTitle()
+            }
+          }
+        ]
+      : [
+          {
+            label: 'Pause 30 minutes',
+            click: () => {
+              schedulerService.pause(30)
+              notificationService.setPaused(true)
+              this.updateIcon()
+              this.updateTitle()
+            }
+          },
+          {
+            label: 'Pause 1 hour',
+            click: () => {
+              schedulerService.pause(60)
+              notificationService.setPaused(true)
+              this.updateIcon()
+              this.updateTitle()
+            }
+          },
+          {
+            label: 'Pause 2 hours',
+            click: () => {
+              schedulerService.pause(120)
+              notificationService.setPaused(true)
+              this.updateIcon()
+              this.updateTitle()
+            }
+          },
+          { type: 'separator' },
+          {
+            label: 'Pause indefinitely',
+            click: () => {
+              schedulerService.pause()
+              notificationService.setPaused(true)
+              this.updateIcon()
+              this.updateTitle()
+            }
+          }
+        ]
 
     const contextMenu = Menu.buildFromTemplate([
       {
         label: 'Refresh',
+        enabled: !isPaused,
         click: () => {
           schedulerService.refresh()
         }
+      },
+      { type: 'separator' },
+      {
+        label: isPaused ? 'Resume' : 'Pause',
+        submenu: pauseSubmenu
       },
       { type: 'separator' },
       {
@@ -165,6 +290,18 @@ export class TrayManager {
             type: 'radio',
             checked: currentMode === 'compact',
             click: () => this.setDisplayMode('compact')
+          },
+          {
+            label: 'Time Remaining (4h 30m)',
+            type: 'radio',
+            checked: currentMode === 'time-remaining',
+            click: () => this.setDisplayMode('time-remaining')
+          },
+          {
+            label: 'Minimal (icon only)',
+            type: 'radio',
+            checked: currentMode === 'minimal',
+            click: () => this.setDisplayMode('minimal')
           }
         ]
       },

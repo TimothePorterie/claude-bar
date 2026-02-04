@@ -7,6 +7,24 @@ export interface HistoryEntry {
   sevenDay: number
 }
 
+export type TrendDirection = 'up' | 'down' | 'stable'
+
+export interface TrendData {
+  fiveHour: {
+    direction: TrendDirection
+    delta: number // change per hour
+  }
+  sevenDay: {
+    direction: TrendDirection
+    delta: number // change per hour
+  }
+}
+
+export interface TimeToThreshold {
+  fiveHour: number | null // hours until threshold, null if not applicable
+  sevenDay: number | null // hours until threshold, null if not applicable
+}
+
 interface HistoryStoreSchema {
   entries: HistoryEntry[]
 }
@@ -95,6 +113,84 @@ export class HistoryService {
       minFiveHour: Math.min(...fiveHourValues),
       minSevenDay: Math.min(...sevenDayValues),
       entryCount: entries.length
+    }
+  }
+
+  getTrend(lookbackMinutes = 30): TrendData | null {
+    const entries = this.getEntriesForPeriod(lookbackMinutes / 60)
+
+    if (entries.length < 2) {
+      return null
+    }
+
+    // Split entries into first and second half
+    const midIndex = Math.floor(entries.length / 2)
+    const firstHalf = entries.slice(0, midIndex)
+    const secondHalf = entries.slice(midIndex)
+
+    // Calculate averages for each half
+    const avgFirstFiveHour = firstHalf.reduce((sum, e) => sum + e.fiveHour, 0) / firstHalf.length
+    const avgSecondFiveHour = secondHalf.reduce((sum, e) => sum + e.fiveHour, 0) / secondHalf.length
+    const avgFirstSevenDay = firstHalf.reduce((sum, e) => sum + e.sevenDay, 0) / firstHalf.length
+    const avgSecondSevenDay = secondHalf.reduce((sum, e) => sum + e.sevenDay, 0) / secondHalf.length
+
+    // Calculate time span in hours
+    const timeSpanMs = entries[entries.length - 1].timestamp - entries[0].timestamp
+    const timeSpanHours = timeSpanMs / (1000 * 60 * 60) || 1 // Avoid division by zero
+
+    // Calculate delta per hour
+    const fiveHourDelta = (avgSecondFiveHour - avgFirstFiveHour) / (timeSpanHours / 2)
+    const sevenDayDelta = (avgSecondSevenDay - avgFirstSevenDay) / (timeSpanHours / 2)
+
+    // Threshold for considering stable (±2% per hour)
+    const STABLE_THRESHOLD = 2
+
+    const getDirection = (delta: number): TrendDirection => {
+      if (delta > STABLE_THRESHOLD) return 'up'
+      if (delta < -STABLE_THRESHOLD) return 'down'
+      return 'stable'
+    }
+
+    return {
+      fiveHour: {
+        direction: getDirection(fiveHourDelta),
+        delta: Math.round(fiveHourDelta * 10) / 10
+      },
+      sevenDay: {
+        direction: getDirection(sevenDayDelta),
+        delta: Math.round(sevenDayDelta * 10) / 10
+      }
+    }
+  }
+
+  estimateTimeToThreshold(threshold: number): TimeToThreshold | null {
+    const trend = this.getTrend(30)
+    const latest = this.getLatestEntry()
+
+    if (!trend || !latest) {
+      return null
+    }
+
+    const calculateHoursToThreshold = (current: number, deltaPerHour: number): number | null => {
+      // Only estimate if trending up and not already at/above threshold
+      if (deltaPerHour <= 0 || current >= threshold) {
+        return null
+      }
+
+      const remaining = threshold - current
+      const hours = remaining / deltaPerHour
+
+      // Cap at 24 hours - beyond that is too unreliable
+      if (hours > 24) {
+        return null
+      }
+
+      return Math.round(hours * 10) / 10 // Round to 1 decimal
+    }
+
+    return {
+      fiveHour: calculateHoursToThreshold(latest.fiveHour, trend.fiveHour.delta),
+      sevenDay: calculateHoursToThreshold(latest.sevenDay, trend.sevenDay.delta)
     }
   }
 

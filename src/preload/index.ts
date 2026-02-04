@@ -1,23 +1,43 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+export type QuotaErrorType = 'network' | 'auth' | 'rate_limit' | 'server' | 'unknown'
+
+export interface QuotaError {
+  type: QuotaErrorType
+  message: string
+  retryable: boolean
+}
+
 export interface QuotaInfo {
   fiveHour: {
     utilization: number
     resetsAt: Date
     resetsIn: string
+    resetProgress: number
   }
   sevenDay: {
     utilization: number
     resetsAt: Date
     resetsIn: string
+    resetProgress: number
   }
   lastUpdated: Date
+  error?: QuotaError
 }
 
 export interface Settings {
   refreshInterval: number
   launchAtLogin: boolean
   notificationsEnabled: boolean
+  warningThreshold: number
+  criticalThreshold: number
+  adaptiveRefresh: boolean
+  showTimeToCritical: boolean
+}
+
+export interface Thresholds {
+  warning: number
+  critical: number
 }
 
 export interface UserInfo {
@@ -48,10 +68,34 @@ export interface HistoryStats {
   entryCount: number
 }
 
+export type TrendDirection = 'up' | 'down' | 'stable'
+
+export interface TrendData {
+  fiveHour: {
+    direction: TrendDirection
+    delta: number
+  }
+  sevenDay: {
+    direction: TrendDirection
+    delta: number
+  }
+}
+
+export interface TimeToThreshold {
+  fiveHour: number | null
+  sevenDay: number | null
+}
+
 export interface UpdateStatus {
   available: boolean
   downloaded: boolean
   version: string | null
+}
+
+export interface PauseStatus {
+  paused: boolean
+  resumeAt: number | null
+  remainingMs: number | null
 }
 
 const api = {
@@ -78,6 +122,27 @@ const api = {
   setNotificationsEnabled: (enabled: boolean): Promise<boolean> =>
     ipcRenderer.invoke('set-notifications-enabled', enabled),
 
+  // Thresholds
+  getThresholds: (): Promise<Thresholds> => ipcRenderer.invoke('get-thresholds'),
+  setWarningThreshold: (threshold: number): Promise<boolean> =>
+    ipcRenderer.invoke('set-warning-threshold', threshold),
+  setCriticalThreshold: (threshold: number): Promise<boolean> =>
+    ipcRenderer.invoke('set-critical-threshold', threshold),
+
+  // Adaptive refresh
+  setAdaptiveRefresh: (enabled: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('set-adaptive-refresh', enabled),
+
+  // Time to critical display
+  setShowTimeToCritical: (enabled: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('set-show-time-to-critical', enabled),
+
+  // Pause/Focus mode
+  pauseMonitoring: (durationMinutes?: number): Promise<boolean> =>
+    ipcRenderer.invoke('pause-monitoring', durationMinutes),
+  resumeMonitoring: (): Promise<boolean> => ipcRenderer.invoke('resume-monitoring'),
+  getPauseStatus: (): Promise<PauseStatus> => ipcRenderer.invoke('get-pause-status'),
+
   // App info
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
 
@@ -88,6 +153,10 @@ const api = {
   getHistoryStats: (hours: number): Promise<HistoryStats | null> =>
     ipcRenderer.invoke('get-history-stats', hours),
   clearHistory: (): Promise<boolean> => ipcRenderer.invoke('clear-history'),
+  getTrend: (lookbackMinutes?: number): Promise<TrendData | null> =>
+    ipcRenderer.invoke('get-trend', lookbackMinutes),
+  getTimeToCritical: (): Promise<TimeToThreshold | null> =>
+    ipcRenderer.invoke('get-time-to-critical'),
 
   // Updates
   checkForUpdates: (): Promise<UpdateStatus> => ipcRenderer.invoke('check-for-updates'),
@@ -95,7 +164,12 @@ const api = {
   installUpdate: (): Promise<void> => ipcRenderer.invoke('install-update'),
 
   // Logs
-  getLogPath: (): Promise<string> => ipcRenderer.invoke('get-log-path')
+  getLogPath: (): Promise<string> => ipcRenderer.invoke('get-log-path'),
+
+  // Window
+  reportContentHeight: (height: number): void => {
+    ipcRenderer.send('popup-content-height', height)
+  }
 }
 
 contextBridge.exposeInMainWorld('claudeBar', api)

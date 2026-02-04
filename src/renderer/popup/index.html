@@ -54,7 +54,10 @@
         <div class="quota-card" id="fiveHourCard">
           <div class="quota-header">
             <span class="quota-title">Session (5h)</span>
-            <span class="quota-value" id="fiveHourValue">--%</span>
+            <span class="quota-value-wrapper">
+              <span class="quota-value" id="fiveHourValue">--%</span>
+              <span class="trend-indicator" id="fiveHourTrend"></span>
+            </span>
           </div>
           <div class="progress-bar">
             <div class="progress-fill" id="fiveHourProgress"></div>
@@ -63,13 +66,19 @@
             <span class="reset-label">Resets in</span>
             <span class="reset-value" id="fiveHourReset">--</span>
           </div>
+          <div class="reset-progress-bar">
+            <div class="reset-progress-fill" id="fiveHourResetProgress"></div>
+          </div>
         </div>
 
         <!-- 7-day weekly quota -->
         <div class="quota-card" id="sevenDayCard">
           <div class="quota-header">
             <span class="quota-title">Weekly (7d)</span>
-            <span class="quota-value" id="sevenDayValue">--%</span>
+            <span class="quota-value-wrapper">
+              <span class="quota-value" id="sevenDayValue">--%</span>
+              <span class="trend-indicator" id="sevenDayTrend"></span>
+            </span>
           </div>
           <div class="progress-bar">
             <div class="progress-fill" id="sevenDayProgress"></div>
@@ -78,7 +87,16 @@
             <span class="reset-label">Resets in</span>
             <span class="reset-value" id="sevenDayReset">--</span>
           </div>
+          <div class="reset-progress-bar">
+            <div class="reset-progress-fill" id="sevenDayResetProgress"></div>
+          </div>
         </div>
+      </div>
+
+      <!-- Time to critical warning -->
+      <div class="time-to-critical" id="timeToCritical" style="display: none;">
+        <span class="ttc-icon">⚠️</span>
+        <span class="ttc-text" id="ttcText">Est. critical in ~2h</span>
       </div>
 
       <!-- History section -->
@@ -106,6 +124,23 @@
       <div class="footer" id="footer" style="display: none;">
         <span class="last-updated" id="lastUpdated">Last updated: --</span>
       </div>
+
+      <!-- Error state -->
+      <div class="error-section" id="errorSection" style="display: none;">
+        <div class="error-icon" id="errorIcon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 8v4M12 16h.01"/>
+          </svg>
+        </div>
+        <div class="error-content">
+          <span class="error-message" id="errorMessage">Error loading quota</span>
+          <button class="error-retry-btn" id="errorRetryBtn">Retry</button>
+        </div>
+      </div>
+
+      <!-- Toast notification -->
+      <div class="toast" id="toast">Updated</div>
 
       <!-- Not connected state -->
       <div class="not-connected" id="notConnected" style="display: none;">
