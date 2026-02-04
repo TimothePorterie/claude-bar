@@ -41,6 +41,24 @@ function redactToken(token: string): string {
   return `${token.substring(0, 4)}...${token.substring(token.length - 4)}`
 }
 
+// Prototype pollution-safe JSON parsing
+function safeJsonParse(jsonStr: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(jsonStr)
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+    // Check for prototype pollution attempts
+    if ('__proto__' in parsed || 'constructor' in parsed || 'prototype' in parsed) {
+      logger.warn('Potential prototype pollution attempt detected in JSON')
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 export class KeychainService {
   private static readonly SERVICE_NAME = 'Claude Code-credentials'
   private static readonly TOKEN_REFRESH_URL = 'https://api.anthropic.com/api/oauth/token'
@@ -63,17 +81,9 @@ export class KeychainService {
         return null
       }
 
-      let data: Record<string, unknown>
-      try {
-        data = JSON.parse(jsonStr)
-      } catch {
-        logger.error('Invalid JSON in Keychain data')
-        return null
-      }
-
-      // Validate the structure of the data
-      if (!data || typeof data !== 'object') {
-        logger.error('Keychain data is not an object')
+      const data = safeJsonParse(jsonStr)
+      if (!data) {
+        logger.error('Invalid or unsafe JSON in Keychain data')
         return null
       }
 
@@ -265,16 +275,9 @@ export class KeychainService {
         '-w'
       ])
 
-      let data: Record<string, unknown>
-      try {
-        data = JSON.parse(stdout.trim())
-      } catch {
-        logger.error('Invalid JSON in existing Keychain data')
-        return false
-      }
-
-      if (!data || typeof data !== 'object') {
-        logger.error('Keychain data is not an object')
+      const data = safeJsonParse(stdout.trim())
+      if (!data) {
+        logger.error('Invalid or unsafe JSON in existing Keychain data')
         return false
       }
 

@@ -16,6 +16,10 @@
       "filter": ["**/*"]
     }
   ],
+  "asar": true,
+  "asarUnpack": [
+    "**/*.node"
+  ],
   "mac": {
     "category": "public.app-category.utilities",
     "icon": "assets/app-icon.icns",
@@ -27,8 +31,9 @@
     ],
     "entitlements": "entitlements.mac.plist",
     "entitlementsInherit": "entitlements.mac.plist",
-    "hardenedRuntime": false,
-    "gatekeeperAssess": false
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "minimumSystemVersion": "10.13"
   },
   "dmg": {
     "artifactName": "${productName}-${version}-${arch}.${ext}",
@@ -46,5 +51,9 @@
         "path": "/Applications"
       }
     ]
+  },
+  "publish": {
+    "provider": "github",
+    "releaseType": "release"
   }
 }
