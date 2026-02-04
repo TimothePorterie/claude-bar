@@ -13,8 +13,22 @@ const CSP = [
   "connect-src 'self' https://api.anthropic.com", // Only allow Anthropic API
   "frame-src 'none'",
   "object-src 'none'",
-  "base-uri 'self'"
+  "base-uri 'self'",
+  "form-action 'none'",
+  "upgrade-insecure-requests"
 ].join('; ')
+
+// Permissions Policy - disable unnecessary browser features
+const PERMISSIONS_POLICY = [
+  'camera=()',
+  'microphone=()',
+  'geolocation=()',
+  'payment=()',
+  'usb=()',
+  'magnetometer=()',
+  'gyroscope=()',
+  'accelerometer=()'
+].join(', ')
 
 export class WindowManager {
   private popupWindow: BrowserWindow | null = null
@@ -34,12 +48,16 @@ export class WindowManager {
     if (this.securityInitialized) return
     this.securityInitialized = true
 
-    // Add CSP headers to all responses
+    // Add security headers to all responses
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
-          'Content-Security-Policy': [CSP]
+          'Content-Security-Policy': [CSP],
+          'Permissions-Policy': [PERMISSIONS_POLICY],
+          'X-Content-Type-Options': ['nosniff'],
+          'X-Frame-Options': ['DENY'],
+          'Referrer-Policy': ['strict-origin-when-cross-origin']
         }
       })
     })
