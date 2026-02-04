@@ -33,10 +33,9 @@ Choose your preferred menu bar format (right-click → Display Mode):
 - **Detailed**: `5h: 45% | 7d: 32%`
 - **Compact**: `45%` (shows highest usage only)
 
-### Usage History
+### Usage Statistics
 - Track quota usage over time with persistent storage
-- Interactive chart visualization (1h, 6h, 24h periods)
-- Statistics: average, peak, and minimum values
+- 24-hour statistics: average and peak values
 
 ### Notifications
 - Warning alert at 70% utilization
@@ -101,7 +100,7 @@ Claude Bar reads the OAuth credentials stored by Claude Code in the macOS Keycha
 
 | Action | Result |
 |--------|--------|
-| **Left-click** on menu bar icon | Opens quota popup |
+| **Left-click** on menu bar icon | Opens quota popup and refreshes data |
 | **Right-click** on menu bar icon | Shows context menu (Refresh, Settings, Quit) |
 
 ### Menu Bar Display
