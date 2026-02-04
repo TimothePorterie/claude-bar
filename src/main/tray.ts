@@ -55,11 +55,12 @@ export class TrayManager {
     // Set initial title
     this.updateTitle()
 
-    // Left click shows popup
+    // Left click shows popup and refreshes quota
     this.tray.on('click', () => {
       if (this.onShowPopup) {
         this.onShowPopup()
       }
+      schedulerService.refresh()
     })
 
     // Right click shows context menu
