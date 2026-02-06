@@ -20,6 +20,7 @@ vi.mock('../src/main/services/logger', () => ({
   }
 }))
 
+import { Notification } from 'electron'
 import { NotificationService } from '../src/main/services/notifications'
 
 describe('NotificationService', () => {
@@ -61,6 +62,88 @@ describe('NotificationService', () => {
 
       // Transition to critical
       notificationService.checkAndNotify(92, 45)
+    })
+  })
+
+  describe('notifyTokenRefreshFailed', () => {
+    it('should respect 30-minute cooldown', () => {
+      vi.useFakeTimers()
+
+      const showSpy = vi.spyOn(Notification.prototype, 'show')
+
+      notificationService.notifyTokenRefreshFailed()
+      expect(showSpy).toHaveBeenCalledTimes(1)
+
+      // Call again immediately — should be suppressed
+      notificationService.notifyTokenRefreshFailed()
+      expect(showSpy).toHaveBeenCalledTimes(1)
+
+      // Advance 15 minutes — still within cooldown
+      vi.advanceTimersByTime(15 * 60 * 1000)
+      notificationService.notifyTokenRefreshFailed()
+      expect(showSpy).toHaveBeenCalledTimes(1)
+
+      // Advance another 16 minutes (total 31 min) — past cooldown
+      vi.advanceTimersByTime(16 * 60 * 1000)
+      notificationService.notifyTokenRefreshFailed()
+      expect(showSpy).toHaveBeenCalledTimes(2)
+
+      vi.useRealTimers()
+      showSpy.mockRestore()
+    })
+  })
+
+  describe('quota recovery notifications', () => {
+    it('should notify when session quota transitions from warning to normal', () => {
+      const showSpy = vi.spyOn(Notification.prototype, 'show')
+
+      // Go to warning
+      notificationService.checkAndNotify(75, 40)
+      expect(showSpy).toHaveBeenCalledTimes(1) // warning notification
+
+      // Drop back to normal — should trigger recovery notification
+      notificationService.checkAndNotify(50, 40)
+      expect(showSpy).toHaveBeenCalledTimes(2) // recovery notification
+
+      showSpy.mockRestore()
+    })
+
+    it('should notify when session quota transitions from critical to normal', () => {
+      const showSpy = vi.spyOn(Notification.prototype, 'show')
+
+      // Go to critical
+      notificationService.checkAndNotify(95, 40)
+      expect(showSpy).toHaveBeenCalledTimes(1) // critical notification
+
+      // Drop back to normal
+      notificationService.checkAndNotify(50, 40)
+      expect(showSpy).toHaveBeenCalledTimes(2) // recovery notification
+
+      showSpy.mockRestore()
+    })
+
+    it('should notify when weekly quota transitions from warning to normal', () => {
+      const showSpy = vi.spyOn(Notification.prototype, 'show')
+
+      // Go to warning on 7-day
+      notificationService.checkAndNotify(40, 75)
+      expect(showSpy).toHaveBeenCalledTimes(1) // warning notification
+
+      // Drop back to normal
+      notificationService.checkAndNotify(40, 50)
+      expect(showSpy).toHaveBeenCalledTimes(2) // recovery notification
+
+      showSpy.mockRestore()
+    })
+
+    it('should not notify recovery when staying at normal', () => {
+      const showSpy = vi.spyOn(Notification.prototype, 'show')
+
+      notificationService.checkAndNotify(50, 40)
+      notificationService.checkAndNotify(30, 20)
+      expect(showSpy).toHaveBeenCalledTimes(0) // no notifications at all
+
+      showSpy.mockRestore()
     })
   })
 

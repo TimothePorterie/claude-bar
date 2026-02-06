@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, powerMonitor } from 'electron'
 import { trayManager } from './tray'
 import { windowManager } from './windows'
 import { schedulerService } from './services/scheduler'
@@ -43,6 +43,20 @@ if (!gotTheLock) {
 
     // Initialize auto-updater
     updaterService.initialize()
+
+    // Handle sleep/wake to avoid auth errors when Mac wakes up
+    powerMonitor.on('suspend', () => {
+      logger.info('System suspending — stopping scheduler')
+      schedulerService.stop()
+    })
+
+    powerMonitor.on('resume', () => {
+      logger.info('System resumed — restarting scheduler in 5s')
+      setTimeout(() => {
+        schedulerService.start()
+        logger.info('Scheduler restarted after wake')
+      }, 5000)
+    })
 
     logger.info('Claude Bar started successfully')
   })

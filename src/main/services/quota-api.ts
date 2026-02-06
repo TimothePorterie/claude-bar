@@ -59,8 +59,6 @@ export class QuotaService {
   private lastSuccessfulFetch: number = 0
   private lastError: QuotaError | null = null
   private minFetchInterval = 30000 // 30 seconds minimum between fetches
-  private previousFiveHourUtilization: number | null = null
-  private previousSevenDayUtilization: number | null = null
 
   async fetchQuota(forceRefresh = false): Promise<QuotaInfo | null> {
     // Check cache
@@ -84,27 +82,6 @@ export class QuotaService {
 
       const newFiveHourReset = new Date(data.five_hour.resets_at)
       const newSevenDayReset = new Date(data.seven_day.resets_at)
-
-      // Check for quota resets - detect when utilization drops significantly (>30%)
-      // This indicates the rolling window has moved past high-usage periods
-      const RESET_THRESHOLD = 30
-      if (
-        this.previousFiveHourUtilization !== null &&
-        this.previousFiveHourUtilization >= 50 &&
-        data.five_hour.utilization < this.previousFiveHourUtilization - RESET_THRESHOLD
-      ) {
-        notificationService.notifyQuotaReset('fiveHour')
-      }
-      if (
-        this.previousSevenDayUtilization !== null &&
-        this.previousSevenDayUtilization >= 50 &&
-        data.seven_day.utilization < this.previousSevenDayUtilization - RESET_THRESHOLD
-      ) {
-        notificationService.notifyQuotaReset('sevenDay')
-      }
-
-      this.previousFiveHourUtilization = data.five_hour.utilization
-      this.previousSevenDayUtilization = data.seven_day.utilization
 
       this.cachedQuota = {
         fiveHour: {
@@ -188,6 +165,7 @@ export class QuotaService {
     config: RetryConfig = QuotaService.DEFAULT_RETRY_CONFIG
   ): Promise<Response | null> {
     let lastError: Error | null = null
+    let tokenRefreshAttempted = false
 
     for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
       try {
@@ -210,8 +188,12 @@ export class QuotaService {
         const errorText = await response.text()
 
         if (response.status === 401) {
+          if (tokenRefreshAttempted) {
+            logger.error('Authentication failed after token refresh — giving up')
+            return null
+          }
           logger.error('Authentication failed - token may be expired')
-          // Try to refresh token and retry once
+          tokenRefreshAttempted = true
           const refreshed = await keychainService.refreshToken(credentials)
           if (refreshed) {
             credentials = refreshed

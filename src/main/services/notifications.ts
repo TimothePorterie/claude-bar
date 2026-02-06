@@ -10,6 +10,7 @@ interface NotificationState {
     fiveHour: number
     sevenDay: number
   }
+  lastTokenRefreshFailedNotification: number
 }
 
 interface Thresholds {
@@ -24,7 +25,8 @@ export class NotificationService {
     lastResetNotification: {
       fiveHour: 0,
       sevenDay: 0
-    }
+    },
+    lastTokenRefreshFailedNotification: 0
   }
   private enabled = true
   private paused = false
@@ -102,6 +104,8 @@ export class NotificationService {
           `Your 5-hour quota is at ${Math.round(fiveHourUtilization)}% (threshold: ${this.thresholds.critical}%)! You may be rate limited soon.`,
           'critical'
         )
+      } else if (fiveHourLevel === 'normal' && this.state.lastFiveHourLevel !== 'normal') {
+        this.notifyQuotaReset('fiveHour')
       }
       this.state.lastFiveHourLevel = fiveHourLevel
     }
@@ -120,6 +124,8 @@ export class NotificationService {
           `Your 7-day quota is at ${Math.round(sevenDayUtilization)}% (threshold: ${this.thresholds.critical}%)! Very limited usage remaining.`,
           'critical'
         )
+      } else if (sevenDayLevel === 'normal' && this.state.lastSevenDayLevel !== 'normal') {
+        this.notifyQuotaReset('sevenDay')
       }
       this.state.lastSevenDayLevel = sevenDayLevel
     }
@@ -137,22 +143,29 @@ export class NotificationService {
 
     if (type === 'fiveHour') {
       this.showNotification(
-        'Session Quota Reset',
-        'Your 5-hour session quota has been reset. You can use Claude at full capacity again!',
+        'Session Quota Recovered',
+        'Your 5-hour session quota is back to normal. You can use Claude at full capacity again!',
         'low'
       )
-      this.state.lastFiveHourLevel = 'normal'
     } else {
       this.showNotification(
-        'Weekly Quota Reset',
-        'Your 7-day weekly quota has been reset. Full weekly allowance restored!',
+        'Weekly Quota Recovered',
+        'Your 7-day weekly quota is back to normal. Full weekly allowance restored!',
         'low'
       )
-      this.state.lastSevenDayLevel = 'normal'
     }
   }
 
   notifyTokenRefreshFailed(): void {
+    const now = Date.now()
+    const cooldown = 30 * 60 * 1000 // 30 minutes cooldown
+
+    if (now - this.state.lastTokenRefreshFailedNotification < cooldown) {
+      return
+    }
+
+    this.state.lastTokenRefreshFailedNotification = now
+
     this.showNotification(
       'Authentication Error',
       'Failed to refresh your OAuth token. Please run "claude login" to re-authenticate.',

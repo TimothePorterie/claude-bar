@@ -60,8 +60,8 @@ When enabled (default), refresh rate increases automatically:
 - **Customizable thresholds**: Set your own warning and critical levels (50-99%)
 - Warning alert at configurable threshold (default 70%)
 - Critical alert at configurable threshold (default 90%)
-- Quota reset notifications
-- Token refresh failure alerts
+- Quota recovery notifications (when usage drops back to normal levels)
+- Token refresh failure alerts (with cooldown to prevent spam)
 - Toggle on/off in Settings
 
 ### Auto-Updates
@@ -161,13 +161,20 @@ GET https://api.anthropic.com/api/oauth/usage
 
 No API keys or manual configuration required — if you're logged into Claude Code, you're ready to go!
 
+### Sleep/Wake Handling
+
+Claude Bar handles macOS sleep/wake gracefully:
+- Monitoring stops when the Mac goes to sleep
+- Resumes automatically after wake (with a short delay for network reconnection)
+- Prevents spurious authentication errors after wake
+
 ### Token Management
 
 Claude Bar automatically handles token refresh:
 - Detects expired OAuth tokens
 - Refreshes tokens using the refresh token
 - Updates the Keychain with new credentials
-- Graceful fallback if refresh fails
+- Graceful fallback if refresh fails (with 30-minute cooldown on error notifications)
 
 ### Security
 
