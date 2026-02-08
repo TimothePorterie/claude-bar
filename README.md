@@ -161,12 +161,13 @@ GET https://api.anthropic.com/api/oauth/usage
 
 No API keys or manual configuration required — if you're logged into Claude Code, you're ready to go!
 
-### Sleep/Wake Handling
+### Sleep/Wake & Cold Boot Handling
 
-Claude Bar handles macOS sleep/wake gracefully:
+Claude Bar handles macOS sleep/wake and cold boot gracefully:
 - Monitoring stops when the Mac goes to sleep
 - Resumes automatically after wake (with a short delay for network reconnection)
-- Prevents spurious authentication errors after wake
+- On cold boot (Launch at Login), startup is delayed to allow network initialization
+- Network errors during token refresh are treated as transient (no false auth notifications)
 
 ### Token Management
 

@@ -38,8 +38,11 @@ if (!gotTheLock) {
       onShowSettings: () => windowManager.showSettings()
     })
 
-    // Start the scheduler for automatic refresh
-    schedulerService.start()
+    // Start the scheduler for automatic refresh (delay to allow network initialization on cold boot)
+    setTimeout(() => {
+      schedulerService.start()
+      logger.info('Scheduler started after startup delay')
+    }, 5000)
 
     // Initialize auto-updater
     updaterService.initialize()

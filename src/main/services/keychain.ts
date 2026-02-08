@@ -262,7 +262,7 @@ export class KeychainService {
       } else {
         logger.error('Token refresh error:', error instanceof Error ? error.message : 'Unknown error')
       }
-      notificationService.notifyTokenRefreshFailed()
+      // Don't notify on network errors — they are transient and will retry on next scheduler tick
       return null
     } finally {
       this.isRefreshing = false
