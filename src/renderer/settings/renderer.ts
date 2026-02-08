@@ -17,6 +17,7 @@ const showTimeToCritical = document.getElementById('showTimeToCritical') as HTML
 const appVersion = document.getElementById('appVersion') as HTMLElement
 const updateText = document.getElementById('updateText') as HTMLElement
 const updateBtn = document.getElementById('updateBtn') as HTMLButtonElement
+const checkBtn = document.getElementById('checkBtn') as HTMLButtonElement
 
 async function loadConnectionStatus(): Promise<void> {
   try {
@@ -92,21 +93,25 @@ async function loadAppVersion(): Promise<void> {
 
 async function checkForUpdates(): Promise<void> {
   try {
-    const status = await window.claudeBar.getUpdateStatus()
+    updateText.textContent = 'Checking for updates...'
+    checkBtn.disabled = true
+    updateBtn.style.display = 'none'
+
+    const status = await window.claudeBar.checkForUpdates()
 
     if (status.downloaded && status.version) {
       updateText.textContent = `Update ${status.version} ready to install`
       updateBtn.style.display = 'inline-block'
     } else if (status.available && status.version) {
       updateText.textContent = `Downloading update ${status.version}...`
-      updateBtn.style.display = 'none'
     } else {
       updateText.textContent = 'You are running the latest version'
-      updateBtn.style.display = 'none'
     }
   } catch (error) {
     console.error('Failed to check for updates:', error)
     updateText.textContent = 'Could not check for updates'
+  } finally {
+    checkBtn.disabled = false
   }
 }
 
@@ -150,6 +155,10 @@ updateBtn.addEventListener('click', async () => {
   } catch (error) {
     console.error('Failed to install update:', error)
   }
+})
+
+checkBtn.addEventListener('click', () => {
+  checkForUpdates()
 })
 
 warningThreshold.addEventListener('input', () => {

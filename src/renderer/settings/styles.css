@@ -261,6 +261,33 @@ body {
   color: #555;
 }
 
+.update-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.check-btn {
+  padding: 5px 10px;
+  background: transparent;
+  color: #667eea;
+  border: 1px solid #667eea;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.check-btn:hover {
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.check-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .update-btn {
   padding: 6px 12px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -372,6 +399,15 @@ body {
 
   .update-text {
     color: #aaa;
+  }
+
+  .check-btn {
+    color: #8b9cf7;
+    border-color: #8b9cf7;
+  }
+
+  .check-btn:hover {
+    background: rgba(139, 156, 247, 0.15);
   }
 
   .about .version {

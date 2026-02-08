@@ -66,6 +66,7 @@ When enabled (default), refresh rate increases automatically:
 
 ### Auto-Updates
 - Automatic update checks on startup
+- **Manual check button** in Settings to check for updates on demand
 - Background download of updates
 - One-click install from Settings
 
@@ -149,7 +150,7 @@ Access settings via right-click → Settings:
 - **Notifications**: Enable/disable system notifications for quota alerts
 - **Alert Thresholds**: Customize warning (default 70%) and critical (default 90%) levels
 - **Show "Est. critical" prediction**: Toggle the time-to-critical estimation display
-- **Updates**: Check for updates and install with one click
+- **Updates**: Check for updates manually and install with one click
 
 ## How It Works
 
