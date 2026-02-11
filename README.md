@@ -221,6 +221,9 @@ npm run build
 
 # Create distributable DMG
 npm run dist
+
+# Build and publish release to GitHub (creates release, uploads DMGs + metadata)
+npm run release
 ```
 
 ### Project Structure

@@ -280,6 +280,7 @@ Credentials stored under `Claude Code-credentials`:
 npm run dev          # Development mode with hot reload
 npm run build        # Build for production
 npm run dist         # Create DMG (arm64 + x64)
+npm run release      # Build + publish to GitHub (DMGs + latest-mac.yml + blockmaps)
 npm run test         # Run Vitest tests
 npm run test:watch   # Run tests in watch mode
 npm run test:coverage # Run tests with coverage report

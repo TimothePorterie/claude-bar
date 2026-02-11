@@ -10,6 +10,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "npm run build && electron-builder",
+    "release": "npm run build && electron-builder --publish always",
     "dist:mac": "npm run build && electron-builder --mac",
     "test": "vitest run",
     "test:watch": "vitest",
