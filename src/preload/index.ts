@@ -162,6 +162,11 @@ const api = {
   checkForUpdates: (): Promise<UpdateStatus> => ipcRenderer.invoke('check-for-updates'),
   getUpdateStatus: (): Promise<UpdateStatus> => ipcRenderer.invoke('get-update-status'),
   installUpdate: (): Promise<void> => ipcRenderer.invoke('install-update'),
+  onDownloadProgress: (callback: (percent: number) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, percent: number): void => callback(percent)
+    ipcRenderer.on('update-download-progress', handler)
+    return () => ipcRenderer.removeListener('update-download-progress', handler)
+  },
 
   // Logs
   getLogPath: (): Promise<string> => ipcRenderer.invoke('get-log-path'),

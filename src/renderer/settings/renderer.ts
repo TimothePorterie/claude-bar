@@ -25,8 +25,12 @@ const criticalValue = document.getElementById('criticalValue') as HTMLElement
 const showTimeToCritical = document.getElementById('showTimeToCritical') as HTMLInputElement
 const appVersion = document.getElementById('appVersion') as HTMLElement
 const updateText = document.getElementById('updateText') as HTMLElement
+const updateProgress = document.getElementById('updateProgress') as HTMLElement
+const updateProgressBar = document.getElementById('updateProgressBar') as HTMLElement
 const updateBtn = document.getElementById('updateBtn') as HTMLButtonElement
 const checkBtn = document.getElementById('checkBtn') as HTMLButtonElement
+
+let downloadingVersion: string | null = null
 
 function showConnectedUI(
   email: string,
@@ -143,8 +147,11 @@ async function checkForUpdates(): Promise<void> {
     if (status.downloaded && status.version) {
       updateText.textContent = `Update ${status.version} ready to install`
       updateBtn.style.display = 'inline-block'
+      updateProgress.style.display = 'none'
     } else if (status.available && status.version) {
       updateText.textContent = `Downloading update ${status.version}...`
+      downloadingVersion = status.version
+      updateProgress.style.display = 'block'
     } else {
       updateText.textContent = 'You are running the latest version'
     }
@@ -313,6 +320,21 @@ logoutBtn.addEventListener('click', async () => {
 window.claudeBar.onAuthStateChanged(async (state) => {
   if (state === 'authenticated' || state === 'unauthenticated') {
     await loadConnectionStatus()
+  }
+})
+
+// Listen for download progress
+window.claudeBar.onDownloadProgress((percent) => {
+  const rounded = Math.round(percent)
+  if (rounded >= 100) {
+    updateProgress.style.display = 'none'
+    updateText.textContent = `Update ${downloadingVersion || ''} ready to install`.trim()
+    updateBtn.style.display = 'inline-block'
+  } else {
+    updateProgress.style.display = 'block'
+    updateProgressBar.style.width = `${rounded}%`
+    const versionLabel = downloadingVersion ? ` ${downloadingVersion}` : ''
+    updateText.textContent = `Downloading update${versionLabel}... ${rounded}%`
   }
 })
 

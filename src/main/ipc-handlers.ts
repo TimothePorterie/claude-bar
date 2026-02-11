@@ -544,6 +544,15 @@ export function setupIpcHandlers(): void {
     }
   })
 
+  // Forward download progress to all renderer windows
+  updaterService.onDownloadProgress((percent) => {
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (!win.isDestroyed()) {
+        win.webContents.send('update-download-progress', percent)
+      }
+    })
+  })
+
   // Forward auth state changes to all renderer windows
   authService.onStateChange((state) => {
     BrowserWindow.getAllWindows().forEach((win) => {

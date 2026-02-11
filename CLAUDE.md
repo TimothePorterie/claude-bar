@@ -63,7 +63,7 @@ Tests
 | `src/main/services/logger.ts` | Persistent file logging |
 | `src/main/services/notifications.ts` | System notifications, customizable thresholds, pause support |
 | `src/main/services/history.ts` | Usage history, trend calculation, time-to-threshold estimation |
-| `src/main/services/updater.ts` | Auto-update via electron-updater |
+| `src/main/services/updater.ts` | Auto-update via electron-updater, download progress callback |
 | `src/preload/index.ts` | Exposes `window.claudeBar` API to renderer |
 
 ## Features
@@ -250,6 +250,7 @@ Credentials stored under `Claude Code-credentials`:
 | `check-for-updates` | renderer → main | Check for app updates |
 | `get-update-status` | renderer → main | Get update state |
 | `install-update` | renderer → main | Install pending update |
+| `update-download-progress` | main → renderer | Broadcast download progress (percent) |
 | `get-log-path` | renderer → main | Get log file location |
 | `popup-content-height` | renderer → main | Report popup height for auto-fit |
 | `auth-start-login` | renderer → main | Start OAuth login (opens browser) |

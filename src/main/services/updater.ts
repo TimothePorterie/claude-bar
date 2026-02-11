@@ -7,6 +7,7 @@ export class UpdaterService {
   private updateAvailable = false
   private updateDownloaded = false
   private latestVersion: string | null = null
+  private progressCallback?: (percent: number) => void
 
   initialize(): void {
     // Don't run in development
@@ -38,11 +39,13 @@ export class UpdaterService {
 
     autoUpdater.on('download-progress', (progress) => {
       logger.debug(`Download progress: ${Math.round(progress.percent)}%`)
+      this.progressCallback?.(progress.percent)
     })
 
     autoUpdater.on('update-downloaded', (info) => {
       logger.info(`Update downloaded: ${info.version}`)
       this.updateDownloaded = true
+      this.progressCallback?.(100)
       this.latestVersion = info.version
       notificationService.notifyUpdateReady(info.version)
     })
@@ -88,6 +91,10 @@ export class UpdaterService {
 
   getLatestVersion(): string | null {
     return this.latestVersion
+  }
+
+  onDownloadProgress(callback: (percent: number) => void): void {
+    this.progressCallback = callback
   }
 
   quitAndInstall(): void {
