@@ -16,17 +16,34 @@
       <!-- Connection status -->
       <div class="section">
         <h2>Connection Status</h2>
+        <!-- Connected state -->
         <div class="connection-status" id="connectionStatus">
           <div class="status-indicator connected" id="statusIndicator"></div>
           <div class="status-info">
             <span class="status-text" id="statusText">Connected</span>
-            <span class="status-email" id="statusEmail">--</span>
+            <span class="status-detail">
+              <span class="status-email" id="statusEmail">--</span>
+              <span class="auth-source-badge" id="authSourceBadge" style="display: none;">via CLI</span>
+            </span>
           </div>
+          <button class="logout-btn" id="logoutBtn" style="display: none;">Log Out</button>
         </div>
+        <!-- Not connected state -->
         <div class="not-connected-help" id="notConnectedHelp" style="display: none;">
-          <p>To connect Claude Bar, authenticate with the Claude Code CLI:</p>
-          <code>claude login</code>
-          <p class="hint">Then restart Claude Bar to pick up the new credentials.</p>
+          <button class="login-btn" id="loginBtn">Log In with Claude</button>
+          <p class="hint" style="margin-top: 8px;">Or authenticate via CLI: <code class="inline-code">claude login</code></p>
+        </div>
+        <!-- Waiting for code state -->
+        <div class="auth-code-section" id="authCodeSection" style="display: none;">
+          <p class="auth-code-hint">Authenticate in your browser, then paste the code below:</p>
+          <div class="auth-code-input-row">
+            <input type="text" id="authCodeInput" class="auth-code-input" placeholder="Paste authorization code here" spellcheck="false" autocomplete="off" />
+            <button class="validate-btn" id="validateBtn">Validate</button>
+          </div>
+          <div class="auth-code-actions">
+            <button class="cancel-btn" id="cancelLoginBtn">Cancel</button>
+            <span class="auth-error" id="authError" style="display: none;"></span>
+          </div>
         </div>
       </div>
 

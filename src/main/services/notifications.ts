@@ -168,7 +168,7 @@ export class NotificationService {
 
     this.showNotification(
       'Authentication Error',
-      'Failed to refresh your OAuth token. Please run "claude login" to re-authenticate.',
+      'Your session has expired. Open Settings to log in again.',
       'critical'
     )
   }

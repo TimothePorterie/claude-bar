@@ -1,10 +1,19 @@
 // Settings renderer script
 
 // DOM elements
+const connectionStatus = document.getElementById('connectionStatus') as HTMLElement
 const statusIndicator = document.getElementById('statusIndicator') as HTMLElement
 const statusText = document.getElementById('statusText') as HTMLElement
 const statusEmail = document.getElementById('statusEmail') as HTMLElement
+const authSourceBadge = document.getElementById('authSourceBadge') as HTMLElement
+const logoutBtn = document.getElementById('logoutBtn') as HTMLButtonElement
 const notConnectedHelp = document.getElementById('notConnectedHelp') as HTMLElement
+const loginBtn = document.getElementById('loginBtn') as HTMLButtonElement
+const authCodeSection = document.getElementById('authCodeSection') as HTMLElement
+const authCodeInput = document.getElementById('authCodeInput') as HTMLInputElement
+const validateBtn = document.getElementById('validateBtn') as HTMLButtonElement
+const cancelLoginBtn = document.getElementById('cancelLoginBtn') as HTMLButtonElement
+const authError = document.getElementById('authError') as HTMLElement
 const refreshInterval = document.getElementById('refreshInterval') as HTMLSelectElement
 const adaptiveRefresh = document.getElementById('adaptiveRefresh') as HTMLInputElement
 const notificationsEnabled = document.getElementById('notificationsEnabled') as HTMLInputElement
@@ -19,27 +28,59 @@ const updateText = document.getElementById('updateText') as HTMLElement
 const updateBtn = document.getElementById('updateBtn') as HTMLButtonElement
 const checkBtn = document.getElementById('checkBtn') as HTMLButtonElement
 
+function showConnectedUI(
+  email: string,
+  authSource: string
+): void {
+  connectionStatus.style.display = 'flex'
+  statusIndicator.classList.add('connected')
+  statusText.textContent = 'Connected'
+  statusEmail.textContent = email
+
+  // Show auth source badge
+  if (authSource === 'app') {
+    authSourceBadge.textContent = 'via Claude Bar'
+    authSourceBadge.style.display = 'inline'
+  } else {
+    authSourceBadge.textContent = 'via CLI'
+    authSourceBadge.style.display = 'inline'
+  }
+
+  logoutBtn.style.display = authSource === 'app' ? 'block' : 'none'
+  notConnectedHelp.style.display = 'none'
+  authCodeSection.style.display = 'none'
+}
+
+function showNotConnectedUI(): void {
+  connectionStatus.style.display = 'flex'
+  statusIndicator.classList.remove('connected')
+  statusText.textContent = 'Not Connected'
+  statusEmail.textContent = 'No credentials found'
+  authSourceBadge.style.display = 'none'
+  logoutBtn.style.display = 'none'
+  notConnectedHelp.style.display = 'block'
+  authCodeSection.style.display = 'none'
+}
+
+function showWaitingForCodeUI(): void {
+  notConnectedHelp.style.display = 'none'
+  authCodeSection.style.display = 'block'
+  authCodeInput.value = ''
+  authError.style.display = 'none'
+  authCodeInput.focus()
+}
+
 async function loadConnectionStatus(): Promise<void> {
   try {
     const hasCredentials = await window.claudeBar.hasCredentials()
 
     if (hasCredentials) {
-      statusIndicator.classList.add('connected')
-      statusText.textContent = 'Connected'
-
       const userInfo = await window.claudeBar.getUserInfo()
-      if (userInfo) {
-        statusEmail.textContent = userInfo.email || userInfo.name || 'Authenticated'
-      } else {
-        statusEmail.textContent = 'Authenticated'
-      }
-
-      notConnectedHelp.style.display = 'none'
+      const email = userInfo?.email || userInfo?.name || 'Authenticated'
+      const authSource = (userInfo as { authSource?: string } | null)?.authSource || 'cli'
+      showConnectedUI(email, authSource)
     } else {
-      statusIndicator.classList.remove('connected')
-      statusText.textContent = 'Not Connected'
-      statusEmail.textContent = 'No credentials found'
-      notConnectedHelp.style.display = 'block'
+      showNotConnectedUI()
     }
   } catch (error) {
     console.error('Failed to load connection status:', error)
@@ -206,6 +247,72 @@ showTimeToCritical.addEventListener('change', async () => {
     await window.claudeBar.setShowTimeToCritical(showTimeToCritical.checked)
   } catch (error) {
     console.error('Failed to update show time to critical:', error)
+  }
+})
+
+// Auth event listeners
+loginBtn.addEventListener('click', async () => {
+  loginBtn.disabled = true
+  try {
+    const started = await window.claudeBar.startLogin()
+    if (started) {
+      showWaitingForCodeUI()
+    }
+  } catch (error) {
+    console.error('Failed to start login:', error)
+  } finally {
+    loginBtn.disabled = false
+  }
+})
+
+validateBtn.addEventListener('click', async () => {
+  const code = authCodeInput.value.trim()
+  if (!code) return
+
+  validateBtn.disabled = true
+  authError.style.display = 'none'
+
+  try {
+    const result = await window.claudeBar.submitAuthCode(code)
+    if (result.success) {
+      await loadConnectionStatus()
+    } else {
+      authError.textContent = result.error || 'Authentication failed.'
+      authError.style.display = 'inline'
+    }
+  } catch (error) {
+    console.error('Failed to submit auth code:', error)
+    authError.textContent = 'An unexpected error occurred.'
+    authError.style.display = 'inline'
+  } finally {
+    validateBtn.disabled = false
+  }
+})
+
+authCodeInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    validateBtn.click()
+  }
+})
+
+cancelLoginBtn.addEventListener('click', () => {
+  authCodeSection.style.display = 'none'
+  notConnectedHelp.style.display = 'block'
+})
+
+logoutBtn.addEventListener('click', async () => {
+  try {
+    await window.claudeBar.logout()
+    await loadConnectionStatus()
+  } catch (error) {
+    console.error('Failed to logout:', error)
+  }
+})
+
+// Listen for auth state changes
+window.claudeBar.onAuthStateChanged(async (state) => {
+  if (state === 'authenticated' || state === 'unauthenticated') {
+    await loadConnectionStatus()
   }
 })
 

@@ -1,4 +1,5 @@
 import { keychainService, Credentials } from './keychain'
+import { authService } from './auth'
 import { logger } from './logger'
 import { notificationService } from './notifications'
 import { historyService } from './history'
@@ -67,15 +68,26 @@ export class QuotaService {
       return this.cachedQuota
     }
 
-    // Use getValidCredentials which handles token refresh
-    const credentials = await keychainService.getValidCredentials()
+    // Try auth service first, then fall back to keychain
+    let credentials: Credentials | null = null
+    let tokenSource: 'app' | 'keychain' = 'keychain'
+
+    const appToken = await authService.getValidAccessToken()
+    if (appToken) {
+      credentials = { accessToken: appToken }
+      tokenSource = 'app'
+    } else {
+      // Fallback to keychain
+      credentials = await keychainService.getValidCredentials()
+    }
+
     if (!credentials || !credentials.accessToken) {
       logger.error('No credentials available')
       return null
     }
 
     try {
-      const response = await this.fetchWithRetry(credentials)
+      const response = await this.fetchWithRetry(credentials, undefined, tokenSource)
       if (!response) return null
 
       const data = (await response.json()) as UsageResponse
@@ -138,7 +150,7 @@ export class QuotaService {
     }
 
     if (errorMessage.includes('401') || errorMessage.includes('authentication') || errorMessage.includes('token')) {
-      return { type: 'auth', message: 'Authentication failed. Please run "claude login" again.', retryable: false }
+      return { type: 'auth', message: 'Session expired. Please log in again from Settings.', retryable: false }
     }
 
     if (errorMessage.includes('429') || errorMessage.includes('rate')) {
@@ -162,7 +174,8 @@ export class QuotaService {
 
   private async fetchWithRetry(
     credentials: Credentials,
-    config: RetryConfig = QuotaService.DEFAULT_RETRY_CONFIG
+    config: RetryConfig = QuotaService.DEFAULT_RETRY_CONFIG,
+    tokenSource: 'app' | 'keychain' = 'keychain'
   ): Promise<Response | null> {
     let lastError: Error | null = null
     let tokenRefreshAttempted = false
@@ -194,10 +207,24 @@ export class QuotaService {
           }
           logger.error('Authentication failed - token may be expired')
           tokenRefreshAttempted = true
-          const refreshed = await keychainService.refreshToken(credentials)
-          if (refreshed) {
-            credentials = refreshed
-            continue
+
+          if (tokenSource === 'app') {
+            // Refresh via auth service
+            const refreshed = await authService.refreshTokens()
+            if (refreshed) {
+              const newToken = await authService.getValidAccessToken()
+              if (newToken) {
+                credentials = { accessToken: newToken }
+                continue
+              }
+            }
+          } else {
+            // Refresh via keychain (original behavior)
+            const refreshed = await keychainService.refreshToken(credentials)
+            if (refreshed) {
+              credentials = refreshed
+              continue
+            }
           }
           return null
         }

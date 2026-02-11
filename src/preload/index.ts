@@ -166,6 +166,21 @@ const api = {
   // Logs
   getLogPath: (): Promise<string> => ipcRenderer.invoke('get-log-path'),
 
+  // Auth
+  startLogin: (): Promise<boolean> => ipcRenderer.invoke('auth-start-login'),
+  submitAuthCode: (code: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('auth-submit-code', code),
+  logout: (): Promise<boolean> => ipcRenderer.invoke('auth-logout'),
+  getAuthState: (): Promise<string> => ipcRenderer.invoke('auth-get-state'),
+  onAuthStateChanged: (callback: (state: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: string): void => callback(state)
+    ipcRenderer.on('auth-state-changed', handler)
+    return () => ipcRenderer.removeListener('auth-state-changed', handler)
+  },
+
+  // Navigation
+  openSettings: (): Promise<boolean> => ipcRenderer.invoke('open-settings'),
+
   // Window
   reportContentHeight: (height: number): void => {
     ipcRenderer.send('popup-content-height', height)

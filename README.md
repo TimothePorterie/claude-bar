@@ -19,6 +19,7 @@
 ## Features
 
 ### Core
+- **In-App Login** — Log in directly from Claude Bar with OAuth (no CLI needed)
 - **Menu Bar Display** — Shows your current quota usage right in the menu bar
 - **Detailed Popup** — Click to see session (5h) and weekly (7d) quotas with progress bars
 - **Smart Color Coding** — Progress bars change from green → orange → red as usage increases
@@ -73,7 +74,7 @@ When enabled (default), refresh rate increases automatically:
 ## Requirements
 
 - macOS 10.13 or later
-- [Claude Code CLI](https://claude.ai/claude-code) installed and authenticated
+- A Claude Pro or Max subscription
 
 ## Installation
 
@@ -109,13 +110,23 @@ npm run dist
 
 ## Setup
 
-Before using Claude Bar, you need to authenticate with Claude Code CLI:
+### Option 1: Log in from Claude Bar (Recommended)
+
+1. Launch Claude Bar
+2. Click the menu bar icon — the popup shows a **Log In** button
+3. Click **Log In** — your browser opens to authenticate with Claude
+4. Copy the authorization code and paste it back in Settings
+5. Done! Claude Bar starts monitoring your quotas
+
+### Option 2: Use Claude Code CLI credentials
+
+If you already use Claude Code CLI, Claude Bar can reuse your existing credentials:
 
 ```bash
 claude login
 ```
 
-Claude Bar reads the OAuth credentials stored by Claude Code in the macOS Keychain. No additional configuration needed!
+Claude Bar automatically detects credentials stored in the macOS Keychain. No additional configuration needed!
 
 ## Usage
 
@@ -154,13 +165,13 @@ Access settings via right-click → Settings:
 
 ## How It Works
 
-Claude Bar uses the same OAuth credentials as Claude Code CLI, stored securely in the macOS Keychain under `Claude Code-credentials`. It periodically calls the Anthropic API to fetch your current usage:
+Claude Bar authenticates via OAuth with the Anthropic API. You can either log in directly from the app (tokens encrypted via macOS `safeStorage`) or reuse Claude Code CLI credentials from the macOS Keychain. It periodically calls the Anthropic API to fetch your current usage:
 
 ```
 GET https://api.anthropic.com/api/oauth/usage
 ```
 
-No API keys or manual configuration required — if you're logged into Claude Code, you're ready to go!
+No API keys or manual configuration required!
 
 ### Sleep/Wake & Cold Boot Handling
 
@@ -175,14 +186,25 @@ Claude Bar handles macOS sleep/wake and cold boot gracefully:
 Claude Bar automatically handles token refresh:
 - Detects expired OAuth tokens
 - Refreshes tokens using the refresh token
-- Updates the Keychain with new credentials
+- Updates stored credentials (Keychain or encrypted store)
 - Graceful fallback if refresh fails (with 30-minute cooldown on error notifications)
+
+### Authentication Sources
+
+Claude Bar supports two credential sources, with in-app tokens taking priority:
+
+| Source | Storage | Token Refresh | Login/Logout |
+|--------|---------|---------------|--------------|
+| **In-App OAuth** | Encrypted via `safeStorage` | Automatic | Via Settings |
+| **CLI Keychain** | macOS Keychain | Automatic | Via `claude login` |
 
 ### Security
 
 - **Context Isolation**: Renderer cannot access Node.js
 - **Preload Bridge**: All IPC via secure contextBridge
-- **Keychain Storage**: Credentials stored in macOS Keychain
+- **Encrypted Token Storage**: In-app tokens encrypted via macOS `safeStorage`
+- **Keychain Storage**: CLI credentials stored in macOS Keychain
+- **PKCE OAuth Flow**: Secure authorization code flow with code challenge
 - **Signed Updates**: Auto-updates are signed and verified
 
 ## Development
@@ -207,7 +229,7 @@ npm run dist
 claude-bar/
 ├── src/
 │   ├── main/           # Electron main process
-│   │   ├── services/   # Keychain, API, Scheduler, History, Notifications, Updater
+│   │   ├── services/   # Auth, Keychain, API, Scheduler, History, Notifications, Updater
 │   │   ├── tray.ts     # Menu bar icon management
 │   │   └── windows.ts  # Popup & Settings windows
 │   ├── preload/        # Secure IPC bridge
@@ -229,7 +251,7 @@ npm run test:coverage  # Run tests with coverage report
 
 ### "Not Connected" message
 
-Make sure you're authenticated with Claude Code CLI:
+Click **Log In** in the popup or Settings window to authenticate directly. Alternatively, authenticate via the CLI:
 ```bash
 claude login
 ```

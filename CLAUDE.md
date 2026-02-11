@@ -20,6 +20,7 @@ Main Process (Electron)
 ├── windows.ts            # Popup and settings window management
 ├── ipc-handlers.ts       # IPC communication with renderer
 └── services/
+    ├── auth.ts           # In-app OAuth login (PKCE), token storage, refresh
     ├── keychain.ts       # macOS Keychain credential access + token refresh
     ├── quota-api.ts      # Anthropic API integration with retry logic
     ├── scheduler.ts      # Auto-refresh timer
@@ -55,8 +56,9 @@ Tests
 | `src/main/index.ts` | App lifecycle, single instance lock, dock hiding |
 | `src/main/tray.ts` | Menu bar icon, title updates, context menu, display modes, pause menu |
 | `src/main/windows.ts` | Popup and settings windows, auto-fit content height |
-| `src/main/services/keychain.ts` | OAuth token access + automatic refresh |
-| `src/main/services/quota-api.ts` | API calls with retry logic, error classification, tooltips |
+| `src/main/services/auth.ts` | In-app OAuth login (PKCE flow), encrypted token storage, refresh |
+| `src/main/services/keychain.ts` | CLI OAuth token access + automatic refresh (fallback) |
+| `src/main/services/quota-api.ts` | API calls with retry logic, dual auth source support |
 | `src/main/services/scheduler.ts` | Periodic refresh, adaptive intervals, pause/resume |
 | `src/main/services/logger.ts` | Persistent file logging |
 | `src/main/services/notifications.ts` | System notifications, customizable thresholds, pause support |
@@ -67,6 +69,8 @@ Tests
 ## Features
 
 ### Core Features
+- In-app OAuth login (PKCE flow) — no CLI required
+- Dual auth: in-app tokens (priority) with CLI Keychain fallback
 - Real-time quota monitoring (5-hour session + 7-day weekly)
 - Menu bar icon with color-coded status (green/orange/red)
 - Configurable auto-refresh (30s to 10min) with adaptive mode
@@ -134,9 +138,11 @@ Hover over menu bar icon to see:
 - Last updated timestamp
 
 ### Token Management
-- Automatic OAuth token refresh when expired
-- Updates Keychain with refreshed tokens
+- Dual token sources: in-app (encrypted via safeStorage) and CLI Keychain
+- In-app tokens take priority over Keychain credentials
+- Automatic OAuth token refresh when expired (both sources)
 - Graceful fallback on refresh failure
+- Login/Logout UI in popup and settings windows
 
 ### Error Handling
 - Exponential backoff retry (up to 3 attempts)
@@ -152,8 +158,8 @@ Hover over menu bar icon to see:
 
 ## Data Flow
 
-1. **Startup**: App loads settings (including thresholds), initializes logger, hides dock icon
-2. **Credential Access**: `KeychainService` reads/refreshes OAuth token
+1. **Startup**: App loads settings (including thresholds), initializes logger and auth service, hides dock icon
+2. **Credential Access**: `AuthService` (priority) or `KeychainService` (fallback) provides OAuth token
 3. **API Call**: `QuotaService` calls API with retry logic
 4. **History Recording**: Usage data stored for trend analysis and charts
 5. **Trend Calculation**: `HistoryService.getTrend()` analyzes last 30 min
@@ -171,10 +177,20 @@ GET https://api.anthropic.com/api/oauth/usage
 Authorization: Bearer {accessToken}
 anthropic-beta: oauth-2025-04-20
 
-// Token Refresh Endpoint
+// Token Refresh Endpoint (CLI / Keychain)
 POST https://api.anthropic.com/api/oauth/token
 Content-Type: application/x-www-form-urlencoded
 grant_type=refresh_token&refresh_token={token}&client_id=claude-code
+
+// Token Exchange (In-App OAuth — PKCE)
+POST https://console.anthropic.com/v1/oauth/token
+Content-Type: application/x-www-form-urlencoded
+grant_type=authorization_code&code={code}&client_id={app_client_id}&redirect_uri={redirect}&code_verifier={verifier}
+
+// Token Refresh (In-App OAuth)
+POST https://console.anthropic.com/v1/oauth/token
+Content-Type: application/x-www-form-urlencoded
+grant_type=refresh_token&refresh_token={token}&client_id={app_client_id}
 ```
 
 ## Keychain Structure
@@ -236,6 +252,12 @@ Credentials stored under `Claude Code-credentials`:
 | `install-update` | renderer → main | Install pending update |
 | `get-log-path` | renderer → main | Get log file location |
 | `popup-content-height` | renderer → main | Report popup height for auto-fit |
+| `auth-start-login` | renderer → main | Start OAuth login (opens browser) |
+| `auth-submit-code` | renderer → main | Submit authorization code |
+| `auth-logout` | renderer → main | Clear in-app tokens |
+| `auth-get-state` | renderer → main | Get current auth state |
+| `auth-state-changed` | main → renderer | Broadcast auth state changes |
+| `open-settings` | renderer → main | Open settings window from popup |
 
 ## Settings (electron-store)
 
@@ -274,7 +296,10 @@ npm run test:coverage # Run tests with coverage report
 - **Context Isolation**: Enabled (renderer cannot access Node.js)
 - **Node Integration**: Disabled in renderer
 - **Preload Bridge**: All IPC via `contextBridge.exposeInMainWorld`
-- **Keychain**: Read/write access for token refresh
+- **PKCE OAuth**: Authorization code flow with S256 code challenge
+- **Encrypted Storage**: In-app tokens encrypted via macOS `safeStorage`
+- **Keychain**: Read/write access for CLI token refresh (fallback)
+- **CSP**: connect-src allows `api.anthropic.com` and `console.anthropic.com` only
 - **Auto-Update**: Signed updates from GitHub Releases
 
 ## File Locations
@@ -283,7 +308,8 @@ npm run test:coverage # Run tests with coverage report
 - **Settings**: `config.json` via electron-store
 - **History**: `quota-history.json` via electron-store
 - **Logs**: `logs/claude-bar.log` (max 5MB, rotated)
-- **Credentials**: macOS Keychain (`Claude Code-credentials`)
+- **Auth Tokens**: `auth-store.json` via electron-store (encrypted via safeStorage)
+- **CLI Credentials**: macOS Keychain (`Claude Code-credentials`)
 
 ## Dependencies
 

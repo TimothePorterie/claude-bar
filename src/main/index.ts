@@ -2,6 +2,7 @@ import { app, BrowserWindow, powerMonitor } from 'electron'
 import { trayManager } from './tray'
 import { windowManager } from './windows'
 import { schedulerService } from './services/scheduler'
+import { authService } from './services/auth'
 import { setupIpcHandlers, loadSettings } from './ipc-handlers'
 import { updaterService } from './services/updater'
 import { logger } from './services/logger'
@@ -25,6 +26,9 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     logger.info(`Claude Bar v${app.getVersion()} starting...`)
+
+    // Initialize auth service
+    authService.initialize()
 
     // Setup IPC handlers
     setupIpcHandlers()

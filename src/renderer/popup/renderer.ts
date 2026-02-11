@@ -366,10 +366,27 @@ async function refreshQuota(): Promise<void> {
 refreshBtn.addEventListener('click', refreshQuota)
 errorRetryBtn.addEventListener('click', refreshQuota)
 
+// Login button in popup — opens Settings window
+const popupLoginBtn = document.getElementById('popupLoginBtn') as HTMLButtonElement | null
+if (popupLoginBtn) {
+  popupLoginBtn.addEventListener('click', () => {
+    window.claudeBar.openSettings()
+  })
+}
+
 // Listen for quota updates from main process (triggered by tray icon click)
 window.claudeBar.onQuotaUpdated(async (quota) => {
   updateQuotaDisplay(quota)
   await loadHistoryStats()
+})
+
+// Listen for auth state changes to auto-refresh
+window.claudeBar.onAuthStateChanged(async (state) => {
+  if (state === 'authenticated') {
+    await loadQuota()
+  } else if (state === 'unauthenticated') {
+    showNotConnectedState()
+  }
 })
 
 // Report content height to resize window

@@ -10,7 +10,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'", // Allow inline styles for dynamic styling
   "img-src 'self' data:",
   "font-src 'self'",
-  "connect-src 'self' https://api.anthropic.com", // Only allow Anthropic API
+  "connect-src 'self' https://api.anthropic.com https://console.anthropic.com", // Allow Anthropic API + OAuth token endpoint
   "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'self'",

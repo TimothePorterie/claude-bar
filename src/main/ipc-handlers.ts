@@ -1,11 +1,13 @@
-import { ipcMain, app } from 'electron'
+import { ipcMain, app, BrowserWindow } from 'electron'
 import { keychainService } from './services/keychain'
+import { authService } from './services/auth'
 import { quotaService, QuotaInfo } from './services/quota-api'
 import { schedulerService } from './services/scheduler'
 import { historyService, HistoryEntry, TrendData, TimeToThreshold } from './services/history'
 import { notificationService } from './services/notifications'
 import { updaterService } from './services/updater'
 import { logger } from './services/logger'
+import { windowManager } from './windows'
 import Store from 'electron-store'
 
 interface StoreSchema {
@@ -81,9 +83,10 @@ export function setupIpcHandlers(): void {
     }
   })
 
-  // Check if credentials exist
+  // Check if credentials exist (auth service first, then keychain fallback)
   ipcMain.handle('has-credentials', async (): Promise<boolean> => {
     try {
+      if (authService.hasTokens()) return true
       return await keychainService.hasCredentials()
     } catch (error) {
       logger.error('IPC has-credentials error:', error)
@@ -91,18 +94,33 @@ export function setupIpcHandlers(): void {
     }
   })
 
-  // Get user info from credentials
+  // Get user info from credentials (auth service first, then keychain fallback)
   ipcMain.handle(
     'get-user-info',
-    async (): Promise<{ email?: string; name?: string; subscriptionType?: string } | null> => {
+    async (): Promise<{ email?: string; name?: string; subscriptionType?: string; authSource?: string } | null> => {
       try {
+        // Try auth service first
+        const authUserInfo = authService.getUserInfo()
+        if (authUserInfo && authService.hasTokens()) {
+          // Also try keychain for richer user info (email/name)
+          const credentials = await keychainService.getCredentials()
+          return {
+            email: credentials?.emailAddress || authUserInfo.email,
+            name: credentials?.displayName || authUserInfo.name,
+            subscriptionType: credentials?.subscriptionType || authUserInfo.subscriptionType,
+            authSource: 'app'
+          }
+        }
+
+        // Fallback to keychain only
         const credentials = await keychainService.getCredentials()
         if (!credentials) return null
 
         return {
           email: credentials.emailAddress,
           name: credentials.displayName,
-          subscriptionType: credentials.subscriptionType
+          subscriptionType: credentials.subscriptionType,
+          authSource: 'cli'
         }
       } catch (error) {
         logger.error('IPC get-user-info error:', error)
@@ -469,6 +487,70 @@ export function setupIpcHandlers(): void {
       logger.error('IPC get-log-path error:', error)
       return ''
     }
+  })
+
+  // Auth handlers
+  ipcMain.handle('auth-start-login', async (): Promise<boolean> => {
+    try {
+      return await authService.startLogin()
+    } catch (error) {
+      logger.error('IPC auth-start-login error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle(
+    'auth-submit-code',
+    async (_event, code: unknown): Promise<{ success: boolean; error?: string }> => {
+      if (typeof code !== 'string') {
+        return { success: false, error: 'Invalid code format.' }
+      }
+      try {
+        return await authService.submitCode(code)
+      } catch (error) {
+        logger.error('IPC auth-submit-code error:', error)
+        return { success: false, error: 'An unexpected error occurred.' }
+      }
+    }
+  )
+
+  ipcMain.handle('auth-logout', (): boolean => {
+    try {
+      authService.logout()
+      return true
+    } catch (error) {
+      logger.error('IPC auth-logout error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('auth-get-state', (): string => {
+    try {
+      return authService.getState()
+    } catch (error) {
+      logger.error('IPC auth-get-state error:', error)
+      return 'unauthenticated'
+    }
+  })
+
+  // Open settings window from popup
+  ipcMain.handle('open-settings', () => {
+    try {
+      windowManager.showSettings()
+      return true
+    } catch (error) {
+      logger.error('IPC open-settings error:', error)
+      return false
+    }
+  })
+
+  // Forward auth state changes to all renderer windows
+  authService.onStateChange((state) => {
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (!win.isDestroyed()) {
+        win.webContents.send('auth-state-changed', state)
+      }
+    })
   })
 }
 
