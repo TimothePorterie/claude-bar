@@ -17,8 +17,6 @@ body {
   padding-top: 62px; /* Space for title bar + breathing room */
   min-height: 100vh;
   background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
 }
 
 /* Title bar */
