@@ -80,7 +80,7 @@ When enabled (default), refresh rate increases automatically:
 
 ### From DMG (Recommended)
 
-1. Download the latest DMG from [Releases](https://github.com/TheFugu/claude-bar/releases):
+1. Download the latest DMG from [Releases](https://github.com/TimothePorterie/claude-bar/releases):
    - **Apple Silicon (M1/M2/M3):** `Claude.Bar-x.x.x-arm64.dmg`
    - **Intel:** `Claude.Bar-x.x.x-x64.dmg`
 2. Open the DMG and drag **Claude Bar** to your Applications folder
@@ -95,7 +95,7 @@ When enabled (default), refresh rate increases automatically:
 
 ```bash
 # Clone the repository
-git clone https://github.com/TheFugu/claude-bar.git
+git clone https://github.com/TimothePorterie/claude-bar.git
 cd claude-bar
 
 # Install dependencies

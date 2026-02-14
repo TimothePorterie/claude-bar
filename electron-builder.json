@@ -54,6 +54,8 @@
   },
   "publish": {
     "provider": "github",
+    "owner": "TimothePorterie",
+    "repo": "claude-bar",
     "releaseType": "release"
   }
 }
