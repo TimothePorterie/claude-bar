@@ -157,6 +157,7 @@ Access settings via right-click → Settings:
 
 - **Refresh Interval**: How often to fetch new quota data (30s - 10min)
 - **Adaptive Refresh**: Automatically increase refresh rate at warning/critical levels
+- **Authentication Method**: Choose between Claude Bar (OAuth) or CLI (Keychain)
 - **Launch at Login**: Automatically start Claude Bar when you log in
 - **Notifications**: Enable/disable system notifications for quota alerts
 - **Alert Thresholds**: Customize warning (default 70%) and critical (default 90%) levels
@@ -191,12 +192,14 @@ Claude Bar automatically handles token refresh:
 
 ### Authentication Sources
 
-Claude Bar supports two credential sources, with in-app tokens taking priority:
+Claude Bar supports two credential sources, selectable in Settings:
 
 | Source | Storage | Token Refresh | Login/Logout |
 |--------|---------|---------------|--------------|
-| **In-App OAuth** | Encrypted via `safeStorage` | Automatic | Via Settings |
-| **CLI Keychain** | macOS Keychain | Automatic | Via `claude login` |
+| **Claude Bar (OAuth)** | Encrypted via `safeStorage` | Automatic | Via Settings |
+| **CLI (Keychain)** | macOS Keychain | Automatic | Via `claude login` |
+
+Choose your preferred method in **Settings → Authentication method**. No automatic fallback between sources — the selected method is the only one used.
 
 ### Security
 

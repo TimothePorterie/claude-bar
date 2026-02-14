@@ -23,6 +23,7 @@ Main Process (Electron)
     ├── auth.ts           # In-app OAuth login (PKCE), token storage, refresh
     ├── keychain.ts       # macOS Keychain credential access + token refresh
     ├── quota-api.ts      # Anthropic API integration with retry logic
+    ├── settings-store.ts # Shared settings store (electron-store singleton)
     ├── scheduler.ts      # Auto-refresh timer
     ├── logger.ts         # Persistent logging with electron-log
     ├── notifications.ts  # macOS system notifications
@@ -58,7 +59,8 @@ Tests
 | `src/main/windows.ts` | Popup and settings windows, auto-fit content height |
 | `src/main/services/auth.ts` | In-app OAuth login (PKCE flow), encrypted token storage, refresh |
 | `src/main/services/keychain.ts` | CLI OAuth token access + automatic refresh (fallback) |
-| `src/main/services/quota-api.ts` | API calls with retry logic, dual auth source support |
+| `src/main/services/quota-api.ts` | API calls with retry logic, auth source based on authMode setting |
+| `src/main/services/settings-store.ts` | Shared electron-store singleton, avoids circular deps |
 | `src/main/services/scheduler.ts` | Periodic refresh, adaptive intervals, pause/resume |
 | `src/main/services/logger.ts` | Persistent file logging |
 | `src/main/services/notifications.ts` | System notifications, customizable thresholds, pause support |
@@ -70,7 +72,7 @@ Tests
 
 ### Core Features
 - In-app OAuth login (PKCE flow) — no CLI required
-- Dual auth: in-app tokens (priority) with CLI Keychain fallback
+- Auth mode selection: choose between in-app OAuth or CLI Keychain (no auto-fallback)
 - Real-time quota monitoring (5-hour session + 7-day weekly)
 - Menu bar icon with color-coded status (green/orange/red)
 - Configurable auto-refresh (30s to 10min) with adaptive mode
@@ -138,17 +140,18 @@ Hover over menu bar icon to see:
 - Last updated timestamp
 
 ### Token Management
-- Dual token sources: in-app (encrypted via safeStorage) and CLI Keychain
-- In-app tokens take priority over Keychain credentials
-- Automatic OAuth token refresh when expired (both sources)
-- Graceful fallback on refresh failure
+- Two token sources: in-app (encrypted via safeStorage) and CLI Keychain
+- User selects auth mode in Settings (no automatic fallback between sources)
+- Automatic OAuth token refresh when expired
+- Graceful handling on refresh failure
 - Login/Logout UI in popup and settings windows
 
 ### Error Handling
 - Exponential backoff retry (up to 3 attempts)
 - Automatic token refresh on 401 errors
 - Detailed logging for debugging
-- Contextual error UI with retry button
+- Contextual error UI with retry button and error-specific messages
+- Error indicators in menu bar title (`!`) and icon (red) on silent failures
 - Error types: network, auth, rate_limit, server, unknown
 
 ### Auto-Updates
@@ -159,7 +162,7 @@ Hover over menu bar icon to see:
 ## Data Flow
 
 1. **Startup**: App loads settings (including thresholds), initializes logger and auth service, hides dock icon
-2. **Credential Access**: `AuthService` (priority) or `KeychainService` (fallback) provides OAuth token
+2. **Credential Access**: `AuthService` or `KeychainService` provides OAuth token (based on `authMode` setting)
 3. **API Call**: `QuotaService` calls API with retry logic
 4. **History Recording**: Usage data stored for trend analysis and charts
 5. **Trend Calculation**: `HistoryService.getTrend()` analyzes last 30 min
@@ -237,6 +240,7 @@ Credentials stored under `Claude Code-credentials`:
 | `set-warning-threshold` | renderer → main | Update warning threshold |
 | `set-critical-threshold` | renderer → main | Update critical threshold |
 | `set-adaptive-refresh` | renderer → main | Toggle adaptive refresh |
+| `set-auth-mode` | renderer → main | Set auth mode ('app' or 'cli') |
 | `set-show-time-to-critical` | renderer → main | Toggle time-to-critical display |
 | `get-history` | renderer → main | Get usage history |
 | `get-history-chart-data` | renderer → main | Get chart-ready data |
@@ -271,6 +275,7 @@ Credentials stored under `Claude Code-credentials`:
   criticalThreshold: number     // 50-99, default: 90
   adaptiveRefresh: boolean      // default: true
   showTimeToCritical: boolean   // default: true
+  authMode: 'app' | 'cli'     // default: 'app'
   displayMode: 'standard' | 'detailed' | 'compact' | 'minimal' | 'time-remaining' // default: 'standard'
 }
 ```
