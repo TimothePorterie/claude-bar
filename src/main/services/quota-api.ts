@@ -4,6 +4,7 @@ import { logger } from './logger'
 import { notificationService } from './notifications'
 import { historyService } from './history'
 import { schedulerService } from './scheduler'
+import { getAuthMode } from './settings-store'
 
 export interface QuotaData {
   utilization: number
@@ -68,27 +69,37 @@ export class QuotaService {
       return this.cachedQuota
     }
 
-    // Try auth service first, then fall back to keychain
+    // Use only the auth source selected by the user (no fallback)
     let credentials: Credentials | null = null
     let tokenSource: 'app' | 'keychain' = 'keychain'
+    const authMode = getAuthMode()
 
-    const appToken = await authService.getValidAccessToken()
-    if (appToken) {
-      credentials = { accessToken: appToken }
-      tokenSource = 'app'
+    if (authMode === 'app') {
+      const appToken = await authService.getValidAccessToken()
+      if (appToken) {
+        credentials = { accessToken: appToken }
+        tokenSource = 'app'
+      }
     } else {
-      // Fallback to keychain
       credentials = await keychainService.getValidCredentials()
+      tokenSource = 'keychain'
     }
 
     if (!credentials || !credentials.accessToken) {
       logger.error('No credentials available')
+      this.lastError = { type: 'auth', message: 'No credentials found. Please log in.', retryable: false }
       return null
     }
 
     try {
       const response = await this.fetchWithRetry(credentials, undefined, tokenSource)
-      if (!response) return null
+      if (!response) {
+        // fetchWithRetry already set lastError — return cached quota if available
+        if (this.cachedQuota && this.lastError) {
+          return { ...this.cachedQuota, error: this.lastError }
+        }
+        return null
+      }
 
       const data = (await response.json()) as UsageResponse
 
@@ -203,6 +214,7 @@ export class QuotaService {
         if (response.status === 401) {
           if (tokenRefreshAttempted) {
             logger.error('Authentication failed after token refresh — giving up')
+            this.lastError = { type: 'auth', message: 'Session expired. Please log in again.', retryable: false }
             return null
           }
           logger.error('Authentication failed - token may be expired')
@@ -226,12 +238,14 @@ export class QuotaService {
               continue
             }
           }
+          this.lastError = { type: 'auth', message: 'Token refresh failed. Please log in again.', retryable: false }
           return null
         }
 
         // Don't retry for client errors (except 401, 429)
         if (response.status >= 400 && response.status < 500 && response.status !== 429) {
           logger.error(`API error: ${response.status} - ${errorText}`)
+          this.lastError = { type: 'unknown', message: `API error: ${response.status}`, retryable: false }
           return null
         }
 
@@ -252,6 +266,7 @@ export class QuotaService {
     }
 
     logger.error(`All ${config.maxRetries + 1} attempts failed`, lastError)
+    this.lastError = lastError ? this.classifyError(lastError) : { type: 'unknown', message: 'All retry attempts failed.', retryable: true }
     return null
   }
 
@@ -353,7 +368,10 @@ export class QuotaService {
 
   getEnhancedTooltip(): string {
     if (!this.cachedQuota) {
-      return 'Claude Bar - Click to view quotas'
+      if (this.lastError) {
+        return `Claude Bar — ${this.lastError.message}`
+      }
+      return 'Claude Bar — Click to view quotas'
     }
 
     const fiveHour = Math.round(this.cachedQuota.fiveHour.utilization)

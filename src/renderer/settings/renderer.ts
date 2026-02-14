@@ -29,6 +29,7 @@ const updateProgress = document.getElementById('updateProgress') as HTMLElement
 const updateProgressBar = document.getElementById('updateProgressBar') as HTMLElement
 const updateBtn = document.getElementById('updateBtn') as HTMLButtonElement
 const checkBtn = document.getElementById('checkBtn') as HTMLButtonElement
+const authModeSelect = document.getElementById('authMode') as HTMLSelectElement
 
 let downloadingVersion: string | null = null
 
@@ -50,7 +51,9 @@ function showConnectedUI(
     authSourceBadge.style.display = 'inline'
   }
 
-  logoutBtn.style.display = authSource === 'app' ? 'block' : 'none'
+  // Only show logout button in app mode (CLI logout is managed by CLI)
+  const currentMode = authModeSelect.value
+  logoutBtn.style.display = (authSource === 'app' && currentMode === 'app') ? 'block' : 'none'
   notConnectedHelp.style.display = 'none'
   authCodeSection.style.display = 'none'
 }
@@ -62,8 +65,22 @@ function showNotConnectedUI(): void {
   statusEmail.textContent = 'No credentials found'
   authSourceBadge.style.display = 'none'
   logoutBtn.style.display = 'none'
-  notConnectedHelp.style.display = 'block'
   authCodeSection.style.display = 'none'
+
+  // Show appropriate connection help based on auth mode
+  const mode = authModeSelect.value
+  notConnectedHelp.style.display = 'block'
+  if (mode === 'cli') {
+    // In CLI mode, hide login button, show CLI instructions
+    loginBtn.style.display = 'none'
+    const hint = notConnectedHelp.querySelector('.hint') as HTMLElement | null
+    if (hint) hint.style.display = 'block'
+  } else {
+    // In app mode, show login button
+    loginBtn.style.display = 'inline-block'
+    const hint = notConnectedHelp.querySelector('.hint') as HTMLElement | null
+    if (hint) hint.style.display = 'none'
+  }
 }
 
 function showWaitingForCodeUI(): void {
@@ -81,7 +98,7 @@ async function loadConnectionStatus(): Promise<void> {
     if (hasCredentials) {
       const userInfo = await window.claudeBar.getUserInfo()
       const email = userInfo?.email || userInfo?.name || 'Authenticated'
-      const authSource = (userInfo as { authSource?: string } | null)?.authSource || 'cli'
+      const authSource = (userInfo as { authSource?: string } | null)?.authSource || authModeSelect.value
       showConnectedUI(email, authSource)
     } else {
       showNotConnectedUI()
@@ -122,6 +139,11 @@ async function loadSettings(): Promise<void> {
 
     // Set show time to critical
     showTimeToCritical.checked = settings.showTimeToCritical
+
+    // Set auth mode
+    if (settings.authMode) {
+      authModeSelect.value = settings.authMode
+    }
   } catch (error) {
     console.error('Failed to load settings:', error)
   }
@@ -254,6 +276,17 @@ showTimeToCritical.addEventListener('change', async () => {
     await window.claudeBar.setShowTimeToCritical(showTimeToCritical.checked)
   } catch (error) {
     console.error('Failed to update show time to critical:', error)
+  }
+})
+
+// Auth mode change listener
+authModeSelect.addEventListener('change', async () => {
+  try {
+    await window.claudeBar.setAuthMode(authModeSelect.value)
+    // Reload connection status to reflect the new mode
+    await loadConnectionStatus()
+  } catch (error) {
+    console.error('Failed to update auth mode:', error)
   }
 })
 

@@ -85,7 +85,9 @@ const toast = document.getElementById('toast') as HTMLElement
 // Error elements
 const errorSection = document.getElementById('errorSection') as HTMLElement
 const errorMessage = document.getElementById('errorMessage') as HTMLElement
+const errorGuidance = document.getElementById('errorGuidance') as HTMLElement
 const errorRetryBtn = document.getElementById('errorRetryBtn') as HTMLButtonElement
+const errorLoginBtn = document.getElementById('errorLoginBtn') as HTMLButtonElement
 
 function getProgressClass(utilization: number): string {
   if (utilization >= 90) return 'critical'
@@ -210,6 +212,7 @@ function showError(error: QuotaError): void {
 
 function hideError(): void {
   errorSection.style.display = 'none'
+  errorSection.classList.remove('standalone')
   reportContentHeight()
 }
 
@@ -269,6 +272,53 @@ function showNotConnectedState(): void {
   historySection.style.display = 'none'
   footer.style.display = 'none'
   notConnected.style.display = 'flex'
+  errorSection.style.display = 'none'
+  reportContentHeight()
+}
+
+function showFetchErrorState(error: QuotaError): void {
+  // Show header (user may be "logged in" but token is bad), hide content sections
+  header.style.display = 'flex'
+  skeletonContainer.style.display = 'none'
+  quotaCards.style.display = 'none'
+  historySection.style.display = 'none'
+  footer.style.display = 'none'
+  notConnected.style.display = 'none'
+
+  // Configure error section in standalone mode
+  errorSection.classList.add('standalone')
+  errorSection.style.display = 'flex'
+
+  errorMessage.textContent = error.message
+
+  // Contextual guidance and actions based on error type
+  switch (error.type) {
+    case 'auth':
+      errorGuidance.textContent = 'Your session has expired or credentials are invalid.'
+      errorRetryBtn.style.display = 'none'
+      errorLoginBtn.style.display = 'inline-block'
+      break
+    case 'network':
+      errorGuidance.textContent = 'Check your internet connection and try again.'
+      errorRetryBtn.style.display = 'inline-block'
+      errorLoginBtn.style.display = 'none'
+      break
+    case 'rate_limit':
+      errorGuidance.textContent = 'Too many requests. Will retry automatically.'
+      errorRetryBtn.style.display = 'inline-block'
+      errorLoginBtn.style.display = 'none'
+      break
+    case 'server':
+      errorGuidance.textContent = 'Anthropic servers are having issues.'
+      errorRetryBtn.style.display = 'inline-block'
+      errorLoginBtn.style.display = 'none'
+      break
+    default:
+      errorGuidance.textContent = ''
+      errorRetryBtn.style.display = 'inline-block'
+      errorLoginBtn.style.display = 'none'
+  }
+
   reportContentHeight()
 }
 
@@ -330,14 +380,23 @@ async function loadQuota(): Promise<void> {
 
     const quota = await window.claudeBar.getQuota()
 
-    if (quota) {
+    if (quota && !quota.error) {
+      showConnectedState()
+      updateQuotaDisplay(quota)
+      await loadHistoryStats()
+    } else if (quota && quota.error) {
+      // Got cached data with an error — show data but also the error banner
       showConnectedState()
       updateQuotaDisplay(quota)
       await loadHistoryStats()
     } else {
-      // API call failed but credentials exist
-      showConnectedState()
-      lastUpdated.textContent = 'Failed to fetch quota'
+      // No data at all — show standalone error
+      const lastError = await window.claudeBar.getLastError()
+      if (lastError) {
+        showFetchErrorState(lastError)
+      } else {
+        showFetchErrorState({ type: 'unknown', message: 'Failed to fetch quota.', retryable: true })
+      }
     }
   } catch (error) {
     console.error('Failed to load quota:', error)
@@ -374,10 +433,20 @@ if (popupLoginBtn) {
   })
 }
 
+// Login button in error section — opens Settings window
+errorLoginBtn.addEventListener('click', () => {
+  window.claudeBar.openSettings()
+})
+
 // Listen for quota updates from main process (triggered by tray icon click)
 window.claudeBar.onQuotaUpdated(async (quota) => {
   updateQuotaDisplay(quota)
   await loadHistoryStats()
+})
+
+// Listen for quota errors from main process
+window.claudeBar.onQuotaError((error) => {
+  showFetchErrorState(error)
 })
 
 // Listen for auth state changes to auto-refresh

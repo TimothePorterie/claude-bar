@@ -84,6 +84,11 @@ export class TrayManager {
       if (quota) {
         windowManager.sendToPopup('quota-updated', quota)
       }
+      // Forward errors to popup
+      const error = quotaService.getLastError()
+      if (error && !quota) {
+        windowManager.sendToPopup('quota-error', error)
+      }
     })
 
     logger.info('Tray created')
@@ -121,6 +126,17 @@ export class TrayManager {
         this.tray.setTitle(`⏸ ${minutes}m`)
       } else {
         this.tray.setTitle('⏸')
+      }
+      return
+    }
+
+    // If no cached quota and there's an error, show error indicator
+    const lastError = quotaService.getLastError()
+    if (!quotaService.getCachedQuota() && lastError) {
+      if (lastError.type === 'auth') {
+        this.tray.setTitle('⚠ Login')
+      } else {
+        this.tray.setTitle('⚠ Error')
       }
       return
     }
@@ -179,6 +195,15 @@ export class TrayManager {
       const iconPath = this.getIconPath('paused')
       const icon = nativeImage.createFromPath(iconPath)
       icon.setTemplateImage(true)
+      this.tray.setImage(icon)
+      return
+    }
+
+    // Use warning icon if there's an error and no cached data
+    const lastError = quotaService.getLastError()
+    if (!quotaService.getCachedQuota() && lastError) {
+      const iconPath = this.getIconPath('warning')
+      const icon = nativeImage.createFromPath(iconPath)
       this.tray.setImage(icon)
       return
     }

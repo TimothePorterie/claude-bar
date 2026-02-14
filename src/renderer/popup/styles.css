@@ -190,6 +190,58 @@ body {
   background: rgba(245, 158, 11, 0.25);
 }
 
+.error-guidance {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+}
+
+.error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.error-login-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.error-login-btn:hover {
+  opacity: 0.9;
+}
+
+/* Standalone error (shown instead of quota cards) */
+.error-section.standalone {
+  margin-top: 0;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.error-section.standalone .error-icon {
+  margin-bottom: 8px;
+}
+
+.error-section.standalone .error-content {
+  flex-direction: column;
+  align-items: center;
+}
+
+.error-section.standalone .error-actions {
+  justify-content: center;
+}
+
 /* Skeleton loading */
 .skeleton-container {
   display: flex;
@@ -686,5 +738,9 @@ body {
   .error-section.warning .error-retry-btn {
     background: rgba(245, 158, 11, 0.2);
     color: #fbbf24;
+  }
+
+  .error-guidance {
+    color: #777;
   }
 }

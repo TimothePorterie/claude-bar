@@ -8,17 +8,8 @@ import { notificationService } from './services/notifications'
 import { updaterService } from './services/updater'
 import { logger } from './services/logger'
 import { windowManager } from './windows'
-import Store from 'electron-store'
-
-interface StoreSchema {
-  refreshInterval: number
-  launchAtLogin: boolean
-  notificationsEnabled: boolean
-  warningThreshold: number
-  criticalThreshold: number
-  adaptiveRefresh: boolean
-  showTimeToCritical: boolean
-}
+import { settingsStore as store } from './services/settings-store'
+export { getAuthMode } from './services/settings-store'
 
 // Input validation helpers
 const VALID_REFRESH_INTERVALS = [30, 60, 120, 300, 600] as const
@@ -39,18 +30,6 @@ function isValidHistoryHours(value: unknown): value is number {
 function isValidThreshold(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 50 && value <= 99
 }
-
-const store = new Store<StoreSchema>({
-  defaults: {
-    refreshInterval: 60,
-    launchAtLogin: false,
-    notificationsEnabled: true,
-    warningThreshold: 70,
-    criticalThreshold: 90,
-    adaptiveRefresh: true,
-    showTimeToCritical: true
-  }
-})
 
 export function setupIpcHandlers(): void {
   // Get quota data
@@ -83,44 +62,51 @@ export function setupIpcHandlers(): void {
     }
   })
 
-  // Check if credentials exist (auth service first, then keychain fallback)
+  // Check if credentials exist (respects authMode)
   ipcMain.handle('has-credentials', async (): Promise<boolean> => {
     try {
-      if (authService.hasTokens()) return true
-      return await keychainService.hasCredentials()
+      const mode = store.get('authMode')
+      if (mode === 'app') {
+        return authService.hasTokens()
+      } else {
+        return await keychainService.hasCredentials()
+      }
     } catch (error) {
       logger.error('IPC has-credentials error:', error)
       return false
     }
   })
 
-  // Get user info from credentials (auth service first, then keychain fallback)
+  // Get user info from credentials (respects authMode)
   ipcMain.handle(
     'get-user-info',
     async (): Promise<{ email?: string; name?: string; subscriptionType?: string; authSource?: string } | null> => {
       try {
-        // Try auth service first
-        const authUserInfo = authService.getUserInfo()
-        if (authUserInfo && authService.hasTokens()) {
+        const mode = store.get('authMode')
+
+        if (mode === 'app') {
+          if (!authService.hasTokens()) return null
+
+          const authUserInfo = authService.getUserInfo()
           // Also try keychain for richer user info (email/name)
           const credentials = await keychainService.getCredentials()
           return {
-            email: credentials?.emailAddress || authUserInfo.email,
-            name: credentials?.displayName || authUserInfo.name,
-            subscriptionType: credentials?.subscriptionType || authUserInfo.subscriptionType,
+            email: credentials?.emailAddress || authUserInfo?.email,
+            name: credentials?.displayName || authUserInfo?.name,
+            subscriptionType: credentials?.subscriptionType || authUserInfo?.subscriptionType,
             authSource: 'app'
           }
-        }
+        } else {
+          // CLI mode — keychain only
+          const credentials = await keychainService.getCredentials()
+          if (!credentials) return null
 
-        // Fallback to keychain only
-        const credentials = await keychainService.getCredentials()
-        if (!credentials) return null
-
-        return {
-          email: credentials.emailAddress,
-          name: credentials.displayName,
-          subscriptionType: credentials.subscriptionType,
-          authSource: 'cli'
+          return {
+            email: credentials.emailAddress,
+            name: credentials.displayName,
+            subscriptionType: credentials.subscriptionType,
+            authSource: 'cli'
+          }
         }
       } catch (error) {
         logger.error('IPC get-user-info error:', error)
@@ -139,7 +125,8 @@ export function setupIpcHandlers(): void {
         warningThreshold: store.get('warningThreshold'),
         criticalThreshold: store.get('criticalThreshold'),
         adaptiveRefresh: store.get('adaptiveRefresh'),
-        showTimeToCritical: store.get('showTimeToCritical')
+        showTimeToCritical: store.get('showTimeToCritical'),
+        authMode: store.get('authMode')
       }
     } catch (error) {
       logger.error('IPC get-settings error:', error)
@@ -150,7 +137,8 @@ export function setupIpcHandlers(): void {
         warningThreshold: 70,
         criticalThreshold: 90,
         adaptiveRefresh: true,
-        showTimeToCritical: true
+        showTimeToCritical: true,
+        authMode: 'app'
       }
     }
   })
@@ -530,6 +518,42 @@ export function setupIpcHandlers(): void {
     } catch (error) {
       logger.error('IPC auth-get-state error:', error)
       return 'unauthenticated'
+    }
+  })
+
+  // Auth mode handlers
+  ipcMain.handle('get-auth-mode', (): string => {
+    try {
+      return store.get('authMode')
+    } catch (error) {
+      logger.error('IPC get-auth-mode error:', error)
+      return 'app'
+    }
+  })
+
+  ipcMain.handle('set-auth-mode', (_event, mode: unknown): boolean => {
+    if (mode !== 'app' && mode !== 'cli') {
+      logger.warn(`Invalid auth mode rejected: ${mode}`)
+      return false
+    }
+
+    try {
+      store.set('authMode', mode)
+      logger.info(`Auth mode set to: ${mode}`)
+      return true
+    } catch (error) {
+      logger.error('IPC set-auth-mode error:', error)
+      return false
+    }
+  })
+
+  // Get last error
+  ipcMain.handle('get-last-error', () => {
+    try {
+      return quotaService.getLastError()
+    } catch (error) {
+      logger.error('IPC get-last-error error:', error)
+      return null
     }
   })
 

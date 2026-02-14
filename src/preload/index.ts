@@ -33,6 +33,7 @@ export interface Settings {
   criticalThreshold: number
   adaptiveRefresh: boolean
   showTimeToCritical: boolean
+  authMode: 'app' | 'cli'
 }
 
 export interface Thresholds {
@@ -113,6 +114,14 @@ const api = {
   hasCredentials: (): Promise<boolean> => ipcRenderer.invoke('has-credentials'),
   getUserInfo: (): Promise<UserInfo | null> => ipcRenderer.invoke('get-user-info'),
 
+  // Errors
+  getLastError: (): Promise<QuotaError | null> => ipcRenderer.invoke('get-last-error'),
+  onQuotaError: (callback: (error: QuotaError) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, error: QuotaError): void => callback(error)
+    ipcRenderer.on('quota-error', handler)
+    return () => ipcRenderer.removeListener('quota-error', handler)
+  },
+
   // Settings
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('get-settings'),
   setRefreshInterval: (seconds: number): Promise<boolean> =>
@@ -170,6 +179,10 @@ const api = {
 
   // Logs
   getLogPath: (): Promise<string> => ipcRenderer.invoke('get-log-path'),
+
+  // Auth mode
+  getAuthMode: (): Promise<string> => ipcRenderer.invoke('get-auth-mode'),
+  setAuthMode: (mode: string): Promise<boolean> => ipcRenderer.invoke('set-auth-mode', mode),
 
   // Auth
   startLogin: (): Promise<boolean> => ipcRenderer.invoke('auth-start-login'),
