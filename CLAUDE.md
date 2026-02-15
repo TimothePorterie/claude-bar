@@ -156,7 +156,8 @@ Hover over menu bar icon to see:
 
 ### Auto-Updates
 - Automatic update checks on startup
-- Background download of updates
+- Background download with gradient progress bar (8px)
+- Check button auto-hides during download and when update is ready
 - One-click install from Settings
 
 ## Data Flow

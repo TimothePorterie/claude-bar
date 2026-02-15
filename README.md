@@ -67,8 +67,8 @@ When enabled (default), refresh rate increases automatically:
 
 ### Auto-Updates
 - Automatic update checks on startup
-- **Manual check button** in Settings to check for updates on demand
-- Background download of updates with **real-time progress bar**
+- **Manual check button** in Settings (auto-hides during download and when update is ready)
+- Background download with **gradient progress bar** and real-time percentage
 - One-click install from Settings
 
 ## Requirements
