@@ -8,6 +8,7 @@ interface SettingsStoreSchema {
   criticalThreshold: number
   adaptiveRefresh: boolean
   showTimeToCritical: boolean
+  showSparkline: boolean
   authMode: 'app' | 'cli'
 }
 
@@ -20,6 +21,7 @@ export const settingsStore = new Store<SettingsStoreSchema>({
     criticalThreshold: 90,
     adaptiveRefresh: true,
     showTimeToCritical: true,
+    showSparkline: true,
     authMode: 'app'
   }
 })

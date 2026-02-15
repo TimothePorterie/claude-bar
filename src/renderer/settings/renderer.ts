@@ -23,6 +23,7 @@ const warningValue = document.getElementById('warningValue') as HTMLElement
 const criticalThreshold = document.getElementById('criticalThreshold') as HTMLInputElement
 const criticalValue = document.getElementById('criticalValue') as HTMLElement
 const showTimeToCritical = document.getElementById('showTimeToCritical') as HTMLInputElement
+const showSparkline = document.getElementById('showSparkline') as HTMLInputElement
 const appVersion = document.getElementById('appVersion') as HTMLElement
 const updateText = document.getElementById('updateText') as HTMLElement
 const updateProgress = document.getElementById('updateProgress') as HTMLElement
@@ -139,6 +140,9 @@ async function loadSettings(): Promise<void> {
 
     // Set show time to critical
     showTimeToCritical.checked = settings.showTimeToCritical
+
+    // Set show sparkline
+    showSparkline.checked = settings.showSparkline
 
     // Set auth mode
     if (settings.authMode) {
@@ -280,6 +284,14 @@ showTimeToCritical.addEventListener('change', async () => {
     await window.claudeBar.setShowTimeToCritical(showTimeToCritical.checked)
   } catch (error) {
     console.error('Failed to update show time to critical:', error)
+  }
+})
+
+showSparkline.addEventListener('change', async () => {
+  try {
+    await window.claudeBar.setShowSparkline(showSparkline.checked)
+  } catch (error) {
+    console.error('Failed to update show sparkline:', error)
   }
 })
 

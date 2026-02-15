@@ -33,6 +33,7 @@ export interface Settings {
   criticalThreshold: number
   adaptiveRefresh: boolean
   showTimeToCritical: boolean
+  showSparkline: boolean
   authMode: 'app' | 'cli'
 }
 
@@ -145,6 +146,10 @@ const api = {
   // Time to critical display
   setShowTimeToCritical: (enabled: boolean): Promise<boolean> =>
     ipcRenderer.invoke('set-show-time-to-critical', enabled),
+
+  // Sparkline display
+  setShowSparkline: (enabled: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('set-show-sparkline', enabled),
 
   // Pause/Focus mode
   pauseMonitoring: (durationMinutes?: number): Promise<boolean> =>
