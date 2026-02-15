@@ -170,16 +170,20 @@ async function checkForUpdates(): Promise<void> {
       updateText.textContent = `Update ${status.version} ready to install`
       updateBtn.style.display = 'inline-block'
       updateProgress.style.display = 'none'
+      checkBtn.style.display = 'none'
     } else if (status.available && status.version) {
       updateText.textContent = `Downloading update ${status.version}...`
       downloadingVersion = status.version
       updateProgress.style.display = 'block'
+      checkBtn.style.display = 'none'
     } else {
       updateText.textContent = 'You are running the latest version'
+      checkBtn.style.display = 'inline-block'
     }
   } catch (error) {
     console.error('Failed to check for updates:', error)
     updateText.textContent = 'Could not check for updates'
+    checkBtn.style.display = 'inline-block'
   } finally {
     checkBtn.disabled = false
   }
@@ -363,11 +367,13 @@ window.claudeBar.onDownloadProgress((percent) => {
     updateProgress.style.display = 'none'
     updateText.textContent = `Update ${downloadingVersion || ''} ready to install`.trim()
     updateBtn.style.display = 'inline-block'
+    checkBtn.style.display = 'none'
   } else {
     updateProgress.style.display = 'block'
     updateProgressBar.style.width = `${rounded}%`
     const versionLabel = downloadingVersion ? ` ${downloadingVersion}` : ''
     updateText.textContent = `Downloading update${versionLabel}... ${rounded}%`
+    checkBtn.style.display = 'none'
   }
 })
 
