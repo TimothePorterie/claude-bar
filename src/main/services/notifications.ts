@@ -184,7 +184,7 @@ export class NotificationService {
   notifyUpdateReady(version: string): void {
     this.showNotification(
       'Update Ready',
-      `Claude Bar ${version} has been downloaded. Restart the app to apply the update.`,
+      `Claude Bar ${version} has been downloaded. Click "Install Update" in Settings to apply.`,
       'normal'
     )
   }
