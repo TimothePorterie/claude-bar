@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS-lightgrey" alt="Platform: macOS">
-  <img src="https://img.shields.io/badge/electron-28-blue" alt="Electron 28">
+  <img src="https://img.shields.io/badge/electron-40-blue" alt="Electron 40">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License: MIT">
 </p>
 
@@ -10,6 +10,9 @@
   <strong>Monitor your Claude Code quotas directly from the macOS menu bar.</strong>
 </p>
 
+<!-- TODO: Screenshot needs to be updated to reflect current UI features:
+     trend indicators (↑↓→), reset progress bars, time-to-critical warning,
+     statistics section (Avg 5h, Avg 7d, Peak), and refresh button in header. -->
 <p align="center">
   <img src="assets/screenshot.png" alt="Claude Bar Screenshot" width="400">
 </p>
@@ -34,15 +37,15 @@
 Choose your preferred menu bar format (right-click → Display Mode):
 - **Standard**: `45% / 32%`
 - **Detailed**: `5h: 45%↑ | 7d: 32%→` (with trend indicators)
-- **Compact**: `45%` (shows highest usage only)
+- **Compact**: `45%` (shows session usage)
 - **Time Remaining**: `4h 30m` (time until session reset)
 - **Minimal**: Icon only, no text
 
 ### Usage Statistics
 - Track quota usage over time with persistent storage
-- 24-hour statistics: average and peak values
-- **Trend indicators**: ↑ rising, ↓ falling, → stable
-- **Time to critical**: Estimates when you'll reach critical level
+- Statistics: average, peak, and minimum values for session and weekly quotas
+- **Trend indicators**: ↑ rising, ↓ falling, → stable (based on last 30 minutes of data)
+- **Time to critical**: Estimates when you'll reach critical level (based on current trend)
 - **Reset progress bar**: Visual indicator of time elapsed in current period
 
 ### Pause Mode
@@ -81,8 +84,8 @@ When enabled (default), refresh rate increases automatically:
 ### From DMG (Recommended)
 
 1. Download the latest DMG from [Releases](https://github.com/TimothePorterie/claude-bar/releases):
-   - **Apple Silicon (M1/M2/M3):** `Claude.Bar-x.x.x-arm64.dmg`
-   - **Intel:** `Claude.Bar-x.x.x-x64.dmg`
+   - **Apple Silicon (M1/M2/M3):** `Claude Bar-x.x.x-arm64.dmg`
+   - **Intel:** `Claude Bar-x.x.x-x64.dmg`
 2. Open the DMG and drag **Claude Bar** to your Applications folder
 3. **Important (Apple Silicon):** The app is not notarized. Before first launch, run:
    ```bash
@@ -122,11 +125,12 @@ npm run dist
 
 If you already use Claude Code CLI, Claude Bar can reuse your existing credentials:
 
-```bash
-claude login
-```
-
-Claude Bar automatically detects credentials stored in the macOS Keychain. No additional configuration needed!
+1. Make sure you're logged in via the CLI:
+   ```bash
+   claude login
+   ```
+2. In Claude Bar, go to **Settings → Authentication method** and select **CLI (Keychain)**
+3. Claude Bar will now use your CLI credentials from the macOS Keychain
 
 ## Usage
 
@@ -157,7 +161,7 @@ Access settings via right-click → Settings:
 
 - **Refresh Interval**: How often to fetch new quota data (30s - 10min)
 - **Adaptive Refresh**: Automatically increase refresh rate at warning/critical levels
-- **Authentication Method**: Choose between Claude Bar (OAuth) or CLI (Keychain)
+- **Authentication Method**: Choose between Claude Bar (OAuth) or CLI (Keychain) — no automatic fallback between sources
 - **Launch at Login**: Automatically start Claude Bar when you log in
 - **Notifications**: Enable/disable system notifications for quota alerts
 - **Alert Thresholds**: Customize warning (default 70%) and critical (default 90%) levels
@@ -188,7 +192,7 @@ Claude Bar automatically handles token refresh:
 - Detects expired OAuth tokens
 - Refreshes tokens using the refresh token
 - Updates stored credentials (Keychain or encrypted store)
-- Graceful fallback if refresh fails (with 30-minute cooldown on error notifications)
+- Graceful error handling if refresh fails (with 30-minute cooldown on error notifications)
 
 ### Authentication Sources
 
