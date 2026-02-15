@@ -434,6 +434,16 @@ body {
   transition: width 0.3s ease;
 }
 
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+.update-progress.indeterminate .update-progress-bar {
+  width: 30%;
+  animation: indeterminate 1.5s ease-in-out infinite;
+}
+
 .update-actions {
   display: flex;
   gap: 8px;

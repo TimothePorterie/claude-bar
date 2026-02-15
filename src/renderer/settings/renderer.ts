@@ -179,6 +179,7 @@ async function checkForUpdates(): Promise<void> {
       updateText.textContent = `Downloading update ${status.version}...`
       downloadingVersion = status.version
       updateProgress.style.display = 'block'
+      updateProgress.classList.add('indeterminate')
       checkBtn.style.display = 'none'
     } else {
       updateText.textContent = 'You are running the latest version'
@@ -376,11 +377,13 @@ window.claudeBar.onAuthStateChanged(async (state) => {
 window.claudeBar.onDownloadProgress((percent) => {
   const rounded = Math.round(percent)
   if (rounded >= 100) {
+    updateProgress.classList.remove('indeterminate')
     updateProgress.style.display = 'none'
     updateText.textContent = `Update ${downloadingVersion || ''} ready to install`.trim()
     updateBtn.style.display = 'inline-block'
     checkBtn.style.display = 'none'
-  } else {
+  } else if (rounded > 0) {
+    updateProgress.classList.remove('indeterminate')
     updateProgress.style.display = 'block'
     updateProgressBar.style.width = `${rounded}%`
     const versionLabel = downloadingVersion ? ` ${downloadingVersion}` : ''
