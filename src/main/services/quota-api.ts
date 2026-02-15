@@ -325,8 +325,8 @@ export class QuotaService {
     const sevenDay = Math.round(this.cachedQuota.sevenDay.utilization)
 
     if (compact) {
-      // Show the higher utilization in compact mode
-      return `${Math.max(fiveHour, sevenDay)}%`
+      // Show session (5-hour) utilization in compact mode
+      return `${fiveHour}%`
     }
 
     return `${fiveHour}% / ${sevenDay}%`

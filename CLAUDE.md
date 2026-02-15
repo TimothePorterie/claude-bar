@@ -83,7 +83,7 @@ Tests
 ### Display Modes (right-click menu)
 - **Standard**: `45% / 32%`
 - **Detailed**: `5h: 45%↑ | 7d: 32%→` (with trend indicators)
-- **Compact**: `45%` (shows highest)
+- **Compact**: `45%` (shows session usage)
 - **Time Remaining**: `4h 30m` (time until session reset)
 - **Minimal**: Icon only, no text
 
