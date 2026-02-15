@@ -126,7 +126,6 @@ export function setupIpcHandlers(): void {
         criticalThreshold: store.get('criticalThreshold'),
         adaptiveRefresh: store.get('adaptiveRefresh'),
         showTimeToCritical: store.get('showTimeToCritical'),
-        showSparkline: store.get('showSparkline'),
         authMode: store.get('authMode')
       }
     } catch (error) {
@@ -139,7 +138,6 @@ export function setupIpcHandlers(): void {
         criticalThreshold: 90,
         adaptiveRefresh: true,
         showTimeToCritical: true,
-        showSparkline: true,
         authMode: 'app'
       }
     }
@@ -291,21 +289,6 @@ export function setupIpcHandlers(): void {
       return true
     } catch (error) {
       logger.error('IPC set-show-time-to-critical error:', error)
-      return false
-    }
-  })
-
-  ipcMain.handle('set-show-sparkline', (_event, enabled: unknown) => {
-    if (!isValidBoolean(enabled)) {
-      logger.warn(`Invalid show-sparkline value rejected: ${enabled}`)
-      return false
-    }
-
-    try {
-      store.set('showSparkline', enabled)
-      return true
-    } catch (error) {
-      logger.error('IPC set-show-sparkline error:', error)
       return false
     }
   })

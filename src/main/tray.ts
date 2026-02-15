@@ -6,7 +6,6 @@ import { schedulerService } from './services/scheduler'
 import { notificationService } from './services/notifications'
 import { logger } from './services/logger'
 import { windowManager } from './windows'
-import { settingsStore } from './services/settings-store'
 import Store from 'electron-store'
 
 type DisplayMode = 'standard' | 'detailed' | 'compact' | 'minimal' | 'time-remaining'
@@ -162,14 +161,6 @@ export class TrayManager {
         title = quotaService.getFormattedTitle(false)
     }
 
-    // Append sparkline if enabled and not in minimal mode
-    if (mode !== 'minimal' && settingsStore.get('showSparkline')) {
-      const sparkline = this.buildSparkline()
-      if (sparkline) {
-        title = `${title} ${sparkline}`
-      }
-    }
-
     this.tray.setTitle(title)
   }
 
@@ -194,42 +185,6 @@ export class TrayManager {
     const sevenDay = Math.round(quota.sevenDay.utilization)
 
     return `5h: ${fiveHour}%${fiveHourSymbol} | 7d: ${sevenDay}%${sevenDaySymbol}`
-  }
-
-  private buildSparkline(): string {
-    const BLOCKS = '▁▂▃▄▅▆▇█'
-    const TARGET_POINTS = 8
-
-    const entries = historyService.getEntriesForPeriod(1) // last 1 hour
-    if (entries.length < 2) return ''
-
-    // Sample to TARGET_POINTS
-    let values: number[]
-    if (entries.length <= TARGET_POINTS) {
-      values = entries.map((e) => e.fiveHour)
-    } else {
-      values = []
-      for (let i = 0; i < TARGET_POINTS; i++) {
-        const idx = Math.round((i * (entries.length - 1)) / (TARGET_POINTS - 1))
-        values.push(entries[idx].fiveHour)
-      }
-    }
-
-    const min = Math.min(...values)
-    const max = Math.max(...values)
-
-    if (max === min) {
-      // All values identical → flat mid-height bar
-      return BLOCKS[3].repeat(values.length)
-    }
-
-    const range = max - min
-    return values
-      .map((v) => {
-        const idx = Math.round(((v - min) / range) * 7)
-        return BLOCKS[idx]
-      })
-      .join('')
   }
 
   updateIcon(): void {
