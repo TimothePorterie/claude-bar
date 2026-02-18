@@ -7,6 +7,7 @@ import { historyService, HistoryEntry, TrendData, TimeToThreshold } from './serv
 import { notificationService } from './services/notifications'
 import { updaterService } from './services/updater'
 import { logger } from './services/logger'
+import { globalShortcutService } from './services/globalShortcuts'
 import { windowManager } from './windows'
 import { settingsStore as store } from './services/settings-store'
 export { getAuthMode } from './services/settings-store'
@@ -575,6 +576,33 @@ export function setupIpcHandlers(): void {
       return true
     } catch (error) {
       logger.error('IPC open-settings error:', error)
+      return false
+    }
+  })
+
+  // Global shortcuts handlers
+  ipcMain.handle('set-global-shortcuts-enabled', (_event, enabled: unknown): boolean => {
+    if (typeof enabled !== 'boolean') {
+      logger.warn(`Invalid global-shortcuts-enabled value rejected: ${enabled}`)
+      return false
+    }
+
+    try {
+      store.set('globalShortcutsEnabled', enabled)
+      const result = globalShortcutService.setEnabled(enabled)
+      logger.info(`Global shortcuts ${enabled ? 'enabled' : 'disabled'}`)
+      return result
+    } catch (error) {
+      logger.error('IPC set-global-shortcuts-enabled error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('get-global-shortcuts-enabled', (): boolean => {
+    try {
+      return store.get('globalShortcutsEnabled')
+    } catch (error) {
+      logger.error('IPC get-global-shortcuts-enabled error:', error)
       return false
     }
   })

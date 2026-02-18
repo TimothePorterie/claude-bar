@@ -186,6 +186,10 @@ const api = {
   getAuthMode: (): Promise<string> => ipcRenderer.invoke('get-auth-mode'),
   setAuthMode: (mode: string): Promise<boolean> => ipcRenderer.invoke('set-auth-mode', mode),
 
+  // Global shortcuts
+  getGlobalShortcutsEnabled: (): Promise<boolean> => ipcRenderer.invoke('get-global-shortcuts-enabled'),
+  setGlobalShortcutsEnabled: (enabled: boolean): Promise<boolean> => ipcRenderer.invoke('set-global-shortcuts-enabled', enabled),
+
   // Auth
   startLogin: (): Promise<boolean> => ipcRenderer.invoke('auth-start-login'),
   submitAuthCode: (code: string): Promise<{ success: boolean; error?: string }> =>

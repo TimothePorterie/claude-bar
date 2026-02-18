@@ -9,6 +9,7 @@ interface SettingsStoreSchema {
   adaptiveRefresh: boolean
   showTimeToCritical: boolean
   authMode: 'app' | 'cli'
+  globalShortcutsEnabled: boolean
 }
 
 export const settingsStore = new Store<SettingsStoreSchema>({
@@ -20,7 +21,8 @@ export const settingsStore = new Store<SettingsStoreSchema>({
     criticalThreshold: 90,
     adaptiveRefresh: true,
     showTimeToCritical: true,
-    authMode: 'app'
+    authMode: 'app',
+    globalShortcutsEnabled: false // Disabled by default (requires accessibility permissions)
   }
 })
 

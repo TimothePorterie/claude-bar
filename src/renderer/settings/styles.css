@@ -661,3 +661,50 @@ body {
     background: rgba(255, 255, 255, 0.05);
   }
 }
+
+/* Global shortcuts styles */
+.shortcuts-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0 0;
+  font-size: 12px;
+  color: #666;
+}
+
+.shortcuts-list li {
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: #333;
+  background: linear-gradient(to bottom, #f5f5f5, #e5e5e5);
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+  min-width: 18px;
+  text-align: center;
+}
+
+@media (prefers-color-scheme: dark) {
+  .shortcuts-list {
+    color: #aaa;
+  }
+
+  kbd {
+    color: #e5e5e5;
+    background: linear-gradient(to bottom, #3a3a3a, #2a2a2a);
+    border-color: #555;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  }
+}

@@ -3,9 +3,11 @@ import { trayManager } from './tray'
 import { windowManager } from './windows'
 import { schedulerService } from './services/scheduler'
 import { authService } from './services/auth'
+import { globalShortcutService } from './services/globalShortcuts'
 import { setupIpcHandlers, loadSettings } from './ipc-handlers'
 import { updaterService } from './services/updater'
 import { logger } from './services/logger'
+import { settingsStore } from './services/settings-store'
 
 // Prevent multiple instances
 const gotTheLock = app.requestSingleInstanceLock()
@@ -35,6 +37,13 @@ if (!gotTheLock) {
 
     // Load saved settings
     loadSettings()
+
+    // Initialize global shortcuts if enabled
+    const globalShortcutsEnabled = settingsStore.get('globalShortcutsEnabled')
+    if (globalShortcutsEnabled) {
+      globalShortcutService.setEnabled(true)
+      logger.info('Global shortcuts enabled')
+    }
 
     // Create tray icon
     trayManager.create({
@@ -83,6 +92,7 @@ if (!gotTheLock) {
   app.on('before-quit', () => {
     logger.info('Claude Bar shutting down...')
     schedulerService.stop()
+    globalShortcutService.dispose()
     trayManager.destroy()
     windowManager.closeAll()
   })

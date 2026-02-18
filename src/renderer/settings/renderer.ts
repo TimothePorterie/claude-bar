@@ -30,6 +30,7 @@ const updateProgressBar = document.getElementById('updateProgressBar') as HTMLEl
 const updateBtn = document.getElementById('updateBtn') as HTMLButtonElement
 const checkBtn = document.getElementById('checkBtn') as HTMLButtonElement
 const authModeSelect = document.getElementById('authMode') as HTMLSelectElement
+const globalShortcutsEnabled = document.getElementById('globalShortcutsEnabled') as HTMLInputElement
 
 let downloadingVersion: string | null = null
 
@@ -380,8 +381,34 @@ window.claudeBar.onDownloadProgress((percent) => {
   }
 })
 
+// Global shortcuts toggle
+globalShortcutsEnabled?.addEventListener('change', async () => {
+  try {
+    const result = await window.claudeBar.setGlobalShortcutsEnabled(globalShortcutsEnabled.checked)
+    if (!result && globalShortcutsEnabled.checked) {
+      // Failed to enable - revert checkbox
+      globalShortcutsEnabled.checked = false
+      alert('Failed to enable global shortcuts. Make sure Claude Bar has accessibility permissions in System Preferences > Security & Privacy > Privacy > Accessibility.')
+    }
+  } catch (error) {
+    console.error('Failed to update global shortcuts:', error)
+  }
+})
+
+async function loadGlobalShortcutsSetting(): Promise<void> {
+  try {
+    const enabled = await window.claudeBar.getGlobalShortcutsEnabled()
+    if (globalShortcutsEnabled) {
+      globalShortcutsEnabled.checked = enabled
+    }
+  } catch (error) {
+    console.error('Failed to load global shortcuts setting:', error)
+  }
+}
+
 // Initial load
 loadConnectionStatus()
+loadGlobalShortcutsSetting()
 loadSettings()
 loadAppVersion()
 checkForUpdates()
