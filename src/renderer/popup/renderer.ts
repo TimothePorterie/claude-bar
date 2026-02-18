@@ -471,5 +471,28 @@ function reportContentHeight(): void {
   })
 }
 
+// Export history to CSV
+const exportBtn = document.getElementById('exportBtn') as HTMLButtonElement | null
+if (exportBtn) {
+  exportBtn.addEventListener('click', async () => {
+    try {
+      const csv = await window.claudeBar.exportHistoryCSV(24) // Export last 24h
+      const blob = new Blob([csv], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `claude-bar-history-${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      showToast('History exported')
+    } catch (error) {
+      console.error('Failed to export history:', error)
+      showToast('Export failed')
+    }
+  })
+}
+
 // Initial load
 loadQuota()

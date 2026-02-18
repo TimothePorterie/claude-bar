@@ -381,6 +381,17 @@ export function setupIpcHandlers(): void {
     }
   })
 
+  // Export history to CSV
+  ipcMain.handle('export-history-csv', (_event, hours?: unknown): string => {
+    try {
+      const h = typeof hours === 'number' && hours > 0 ? hours : undefined
+      return historyService.exportToCSV(h)
+    } catch (error) {
+      logger.error('IPC export-history-csv error:', error)
+      return ''
+    }
+  })
+
   ipcMain.handle('pause-monitoring', (_event, durationMinutes?: unknown) => {
     try {
       const duration = typeof durationMinutes === 'number' && durationMinutes > 0 ? durationMinutes : undefined

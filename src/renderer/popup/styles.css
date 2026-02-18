@@ -459,6 +459,26 @@ body {
   margin-bottom: 12px;
 }
 
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #666;
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.export-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #333;
+}
+
 .history-title {
   font-size: 13px;
   font-weight: 600;

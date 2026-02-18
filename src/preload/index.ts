@@ -166,6 +166,8 @@ const api = {
     ipcRenderer.invoke('get-trend', lookbackMinutes),
   getTimeToCritical: (): Promise<TimeToThreshold | null> =>
     ipcRenderer.invoke('get-time-to-critical'),
+  exportHistoryCSV: (hours?: number): Promise<string> =>
+    ipcRenderer.invoke('export-history-csv', hours),
 
   // Updates
   checkForUpdates: (): Promise<UpdateStatus> => ipcRenderer.invoke('check-for-updates'),

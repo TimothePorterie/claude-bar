@@ -212,6 +212,23 @@ export class HistoryService {
       sevenDay: sampledEntries.map((e) => e.sevenDay)
     }
   }
+
+  // Export history to CSV format
+  exportToCSV(hours?: number): string {
+    const entries = hours ? this.getEntriesForPeriod(hours) : this.getEntries()
+    
+    if (entries.length === 0) {
+      return 'timestamp,date,five_hour_quota,seven_day_quota\n'
+    }
+
+    const header = 'timestamp,date,five_hour_quota,seven_day_quota\n'
+    const rows = entries.map((e) => {
+      const date = new Date(e.timestamp).toISOString()
+      return `${e.timestamp},${date},${e.fiveHour},${e.sevenDay}`
+    }).join('\n')
+
+    return header + rows + '\n'
+  }
 }
 
 export const historyService = new HistoryService()
