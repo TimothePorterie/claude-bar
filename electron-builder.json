@@ -39,6 +39,7 @@
     "gatekeeperAssess": false,
     "minimumSystemVersion": "10.13"
   },
+  "afterSign": "scripts/notarize.js",
   "dmg": {
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "title": "Claude Bar",
