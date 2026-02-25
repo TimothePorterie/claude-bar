@@ -36,17 +36,17 @@ describe('QuotaService utilities', () => {
     })
 
     it('should format minutes correctly', () => {
-      const futureDate = new Date(Date.now() + 30 * 60 * 1000) // 30 minutes
+      const futureDate = new Date(Date.now() + 30 * 60 * 1000 + 30 * 1000) // 30m + buffer
       expect(formatTimeUntil(futureDate)).toBe('30m')
     })
 
     it('should format hours and minutes correctly', () => {
-      const futureDate = new Date(Date.now() + 2 * 60 * 60 * 1000 + 30 * 60 * 1000) // 2h 30m
+      const futureDate = new Date(Date.now() + 2 * 60 * 60 * 1000 + 30 * 60 * 1000 + 30 * 1000) // 2h 30m + buffer
       expect(formatTimeUntil(futureDate)).toBe('2h 30m')
     })
 
     it('should format days and hours correctly', () => {
-      const futureDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 5 * 60 * 60 * 1000) // 2d 5h
+      const futureDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 5 * 60 * 60 * 1000 + 30 * 1000) // 2d 5h + buffer
       expect(formatTimeUntil(futureDate)).toBe('2d 5h')
     })
   })
