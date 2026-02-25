@@ -37,9 +37,11 @@
     "entitlementsInherit": "entitlements.mac.plist",
     "hardenedRuntime": true,
     "gatekeeperAssess": false,
-    "minimumSystemVersion": "10.13"
+    "minimumSystemVersion": "10.13",
+    "notarize": {
+      "teamId": "YPBYF7PQP2"
+    }
   },
-  "afterSign": "scripts/notarize.js",
   "dmg": {
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "title": "Claude Bar",
