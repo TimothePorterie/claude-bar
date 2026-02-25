@@ -7,27 +7,23 @@ exports.default = async function notarizing(context) {
   const appName = context.packager.appInfo.productFilename;
   const appPath = `${appOutDir}/${appName}.app`;
 
+  const options = { appPath };
+
   if (process.env.APPLE_ID) {
-    // CI: use environment variables
     console.log(`Notarizing ${appName} (CI)...`);
-    await notarize({
-      appBundleId: 'com.claude-bar.app',
-      appPath,
-      tool: 'notarytool',
-      appleId: process.env.APPLE_ID,
-      appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
-      teamId: process.env.APPLE_TEAM_ID,
-    });
+    options.appleId = process.env.APPLE_ID;
+    options.appleIdPassword = process.env.APPLE_APP_SPECIFIC_PASSWORD;
+    options.teamId = process.env.APPLE_TEAM_ID;
   } else {
-    // Local: use stored keychain profile
     console.log(`Notarizing ${appName} (local)...`);
-    await notarize({
-      appBundleId: 'com.claude-bar.app',
-      appPath,
-      tool: 'notarytool',
-      keychainProfile: 'claude-bar-notarize',
-    });
+    options.keychainProfile = 'claude-bar-notarize';
   }
 
-  console.log('Notarization complete.');
+  try {
+    await notarize(options);
+    console.log(`Notarization complete for ${appName}.`);
+  } catch (error) {
+    console.error('Notarization failed:', error.message || error);
+    throw error;
+  }
 };
