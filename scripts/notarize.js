@@ -1,5 +1,3 @@
-// Local-only notarization script (for manual use with afterSign hook).
-// CI uses electron-builder's built-in notarize via mac.notarize config.
 const { notarize } = require('@electron/notarize');
 
 exports.default = async function notarizing(context) {
