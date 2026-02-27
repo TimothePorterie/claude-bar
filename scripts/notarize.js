@@ -9,10 +9,21 @@ exports.default = async function notarizing(context) {
 
   console.log(`Notarizing ${appName}...`);
 
-  await notarize({
-    appPath,
-    keychainProfile: 'claude-bar-notarize',
-  });
+  const options = { appPath };
+
+  if (process.env.APPLE_API_KEY_PATH) {
+    // CI: use App Store Connect API Key
+    options.appleApiKey = process.env.APPLE_API_KEY_PATH;
+    options.appleApiKeyId = process.env.APPLE_API_KEY_ID;
+    options.appleApiIssuer = process.env.APPLE_API_ISSUER_ID;
+    console.log('Using API Key authentication (CI)');
+  } else {
+    // Local: use keychain profile
+    options.keychainProfile = 'claude-bar-notarize-apikey';
+    console.log('Using keychain profile (local)');
+  }
+
+  await notarize(options);
 
   console.log('Notarization complete.');
 };
