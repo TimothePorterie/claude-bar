@@ -88,12 +88,10 @@ export function setupIpcHandlers(): void {
           if (!authService.hasTokens()) return null
 
           const authUserInfo = authService.getUserInfo()
-          // Also try keychain for richer user info (email/name)
-          const credentials = await keychainService.getCredentials()
           return {
-            email: credentials?.emailAddress || authUserInfo?.email,
-            name: credentials?.displayName || authUserInfo?.name,
-            subscriptionType: credentials?.subscriptionType || authUserInfo?.subscriptionType,
+            email: authUserInfo?.email,
+            name: authUserInfo?.name,
+            subscriptionType: authUserInfo?.subscriptionType,
             authSource: 'app'
           }
         } else {
