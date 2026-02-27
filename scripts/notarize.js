@@ -11,11 +11,11 @@ exports.default = async function notarizing(context) {
 
   const options = { appPath };
 
-  if (process.env.APPLE_API_KEY_PATH) {
+  if (process.env.APPLE_API_KEY) {
     // CI: use App Store Connect API Key
-    options.appleApiKey = process.env.APPLE_API_KEY_PATH;
+    options.appleApiKey = process.env.APPLE_API_KEY;
     options.appleApiKeyId = process.env.APPLE_API_KEY_ID;
-    options.appleApiIssuer = process.env.APPLE_API_ISSUER_ID;
+    options.appleApiIssuer = process.env.APPLE_API_ISSUER;
     console.log('Using API Key authentication (CI)');
   } else {
     // Local: use keychain profile
