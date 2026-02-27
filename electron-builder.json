@@ -40,6 +40,7 @@
     "minimumSystemVersion": "10.13"
   },
   "afterSign": "scripts/notarize.js",
+  "afterAllArtifactBuild": "scripts/afterAllArtifactBuild.js",
   "dmg": {
     "artifactName": "${productName}-${version}-${arch}.${ext}",
     "title": "Claude Bar",
