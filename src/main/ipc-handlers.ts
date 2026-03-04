@@ -87,33 +87,7 @@ export function setupIpcHandlers(): void {
         if (mode === 'app') {
           if (!authService.hasTokens()) return null
 
-          let authUserInfo = authService.getUserInfo()
-
-          // If user info is incomplete, try to supplement from keychain
-          if (!authUserInfo?.subscriptionType || !authUserInfo?.email) {
-            try {
-              const keychainCreds = await keychainService.getCredentials()
-              if (keychainCreds) {
-                const updates: Record<string, string> = {}
-                if (!authUserInfo?.subscriptionType && keychainCreds.subscriptionType) {
-                  updates.subscriptionType = keychainCreds.subscriptionType
-                }
-                if (!authUserInfo?.email && keychainCreds.emailAddress) {
-                  updates.email = keychainCreds.emailAddress
-                }
-                if (!authUserInfo?.name && keychainCreds.displayName) {
-                  updates.name = keychainCreds.displayName
-                }
-                if (Object.keys(updates).length > 0) {
-                  authService.updateUserInfo(updates)
-                  authUserInfo = authService.getUserInfo()
-                }
-              }
-            } catch {
-              // Keychain not available, non-critical
-            }
-          }
-
+          const authUserInfo = authService.getUserInfo()
           return {
             email: authUserInfo?.email,
             name: authUserInfo?.name,

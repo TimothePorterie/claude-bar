@@ -103,15 +103,33 @@ export class QuotaService {
 
       const rawData = (await response.json()) as Record<string, unknown>
 
-      // Log full response keys once to help debug subscription type detection
-      logger.debug(`Usage API response keys: ${Object.keys(rawData).join(', ')}`)
 
       const data = rawData as unknown as UsageResponse
 
-      // Extract subscription_type if present in the response
-      if (typeof rawData.subscription_type === 'string' && getAuthMode() === 'app') {
-        authService.updateUserInfo({ subscriptionType: rawData.subscription_type })
-        logger.debug(`Subscription type from usage API: ${rawData.subscription_type}`)
+      // Extract subscription info from the response
+      if (getAuthMode() === 'app' && !authService.getUserInfo()?.subscriptionType) {
+        // Try explicit field names first
+        const subType =
+          (typeof rawData.subscription_type === 'string' && rawData.subscription_type) ||
+          (typeof rawData.subscriptionType === 'string' && rawData.subscriptionType) ||
+          (typeof rawData.plan === 'string' && rawData.plan) ||
+          (typeof rawData.tier === 'string' && rawData.tier) ||
+          null
+
+        if (subType) {
+          authService.updateUserInfo({ subscriptionType: subType })
+          logger.debug(`Subscription type from usage API: ${subType}`)
+        } else {
+          // Deduce from response shape: extra_usage field indicates Max plan
+          const extraUsage = rawData.extra_usage as Record<string, unknown> | null | undefined
+          if (extraUsage && typeof extraUsage === 'object') {
+            authService.updateUserInfo({ subscriptionType: 'max' })
+            logger.debug('Subscription type deduced from usage API: max (extra_usage present)')
+          } else {
+            authService.updateUserInfo({ subscriptionType: 'pro' })
+            logger.debug('Subscription type deduced from usage API: pro (no extra_usage)')
+          }
+        }
       }
 
       const newFiveHourReset = new Date(data.five_hour.resets_at)

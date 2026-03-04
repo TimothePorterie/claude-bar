@@ -172,7 +172,8 @@ export class AuthService {
         return { success: false, error: `Authentication failed (${response.status}). Please try again.` }
       }
 
-      const data = (await response.json()) as TokenResponse
+      const rawData = (await response.json()) as Record<string, unknown>
+      const data = rawData as unknown as TokenResponse
 
       if (!data.access_token || !data.refresh_token) {
         logger.error('Token exchange returned incomplete data')
@@ -183,6 +184,9 @@ export class AuthService {
 
       // Store encrypted tokens
       this.storeTokens(data)
+
+      // Extract user info from token response
+      this.extractUserInfoFromResponse(rawData)
 
       this.codeVerifier = null
       this.stateParam = null
@@ -256,7 +260,8 @@ export class AuthService {
         return false
       }
 
-      const data = (await response.json()) as TokenResponse
+      const rawData = (await response.json()) as Record<string, unknown>
+      const data = rawData as unknown as TokenResponse
 
       if (!data.access_token || !data.refresh_token) {
         logger.error('Token refresh returned incomplete data')
@@ -265,6 +270,7 @@ export class AuthService {
       }
 
       this.storeTokens(data)
+      this.extractUserInfoFromResponse(rawData)
       this.setState('authenticated')
 
       logger.info('Auth token refreshed successfully')
@@ -392,6 +398,45 @@ export class AuthService {
       return Buffer.from(encrypted, 'base64').toString('utf-8')
     }
     return safeStorage.decryptString(Buffer.from(encrypted, 'base64'))
+  }
+
+  private extractUserInfoFromResponse(rawData: Record<string, unknown>): void {
+    if (!this.store) return
+
+    const userInfo: StoredUserInfo = this.store.get('userInfo') || {}
+    let updated = false
+
+    // Try common field names for subscription type
+    for (const key of ['subscription_type', 'subscriptionType', 'plan', 'tier']) {
+      if (typeof rawData[key] === 'string' && rawData[key]) {
+        userInfo.subscriptionType = rawData[key] as string
+        updated = true
+        break
+      }
+    }
+
+    // Try common field names for email
+    for (const key of ['email', 'email_address', 'emailAddress']) {
+      if (typeof rawData[key] === 'string' && rawData[key]) {
+        userInfo.email = rawData[key] as string
+        updated = true
+        break
+      }
+    }
+
+    // Try common field names for name
+    for (const key of ['name', 'display_name', 'displayName']) {
+      if (typeof rawData[key] === 'string' && rawData[key]) {
+        userInfo.name = rawData[key] as string
+        updated = true
+        break
+      }
+    }
+
+    if (updated) {
+      this.store.set('userInfo', userInfo)
+      logger.debug(`User info from token response: ${JSON.stringify(userInfo)}`)
+    }
   }
 
   private storeTokens(data: TokenResponse): void {
