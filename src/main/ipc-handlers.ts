@@ -87,7 +87,7 @@ export function setupIpcHandlers(): void {
         if (mode === 'app') {
           if (!authService.hasTokens()) return null
 
-          const authUserInfo = authService.getUserInfo()
+          const authUserInfo = await authService.ensureUserInfo()
           return {
             email: authUserInfo?.email,
             name: authUserInfo?.name,
