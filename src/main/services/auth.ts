@@ -184,9 +184,6 @@ export class AuthService {
       // Store encrypted tokens
       this.storeTokens(data)
 
-      // Fetch user info with the new token
-      await this.fetchAndStoreUserInfo(data.access_token)
-
       this.codeVerifier = null
       this.stateParam = null
       this.setState('authenticated')
@@ -340,17 +337,10 @@ export class AuthService {
     return this.store.get('userInfo')
   }
 
-  async ensureUserInfo(): Promise<StoredUserInfo | null> {
-    if (!this.store) return null
-    const existing = this.store.get('userInfo')
-    if (existing?.subscriptionType) return existing
-
-    // userInfo is missing or incomplete — try to fetch it
-    const token = await this.getValidAccessToken()
-    if (token) {
-      await this.fetchAndStoreUserInfo(token)
-    }
-    return this.store.get('userInfo')
+  updateUserInfo(info: Partial<StoredUserInfo>): void {
+    if (!this.store) return
+    const existing = this.store.get('userInfo') || {}
+    this.store.set('userInfo', { ...existing, ...info })
   }
 
   hasTokens(): boolean {
@@ -415,93 +405,6 @@ export class AuthService {
     })
   }
 
-  private async fetchAndStoreUserInfo(accessToken: string): Promise<void> {
-    if (!this.store) return
-
-    try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000)
-
-      const response = await fetch('https://api.anthropic.com/api/oauth/userinfo', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'anthropic-beta': 'oauth-2025-04-20'
-        },
-        signal: controller.signal
-      })
-
-      clearTimeout(timeoutId)
-
-      if (response.ok) {
-        const data = (await response.json()) as Record<string, unknown>
-        const userInfo: StoredUserInfo = {}
-
-        if (typeof data.email === 'string') {
-          userInfo.email = data.email
-        } else if (typeof data.email_address === 'string') {
-          userInfo.email = data.email_address
-        }
-
-        if (typeof data.name === 'string') {
-          userInfo.name = data.name
-        } else if (typeof data.display_name === 'string') {
-          userInfo.name = data.display_name as string
-        }
-
-        if (typeof data.subscription_type === 'string') {
-          userInfo.subscriptionType = data.subscription_type
-        }
-
-        this.store.set('userInfo', userInfo)
-        logger.debug(`User info stored: email=${userInfo.email}, subscription=${userInfo.subscriptionType}`)
-      } else {
-        logger.warn(`Userinfo endpoint returned ${response.status}, trying usage endpoint`)
-        // Fallback: try the usage endpoint which may include subscription info
-        await this.fetchUserInfoFromUsage(accessToken)
-      }
-    } catch {
-      // Non-critical: user info fetch failed, token is still valid
-      logger.debug('Could not fetch user info after login')
-    }
-  }
-
-  private async fetchUserInfoFromUsage(accessToken: string): Promise<void> {
-    if (!this.store) return
-
-    try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000)
-
-      const response = await fetch('https://api.anthropic.com/api/oauth/usage', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'anthropic-beta': 'oauth-2025-04-20'
-        },
-        signal: controller.signal
-      })
-
-      clearTimeout(timeoutId)
-
-      if (response.ok) {
-        const data = (await response.json()) as Record<string, unknown>
-        const userInfo: StoredUserInfo = this.store.get('userInfo') || {}
-
-        // The usage endpoint may include subscription_type
-        if (typeof data.subscription_type === 'string') {
-          userInfo.subscriptionType = data.subscription_type
-        }
-
-        if (userInfo.subscriptionType) {
-          this.store.set('userInfo', userInfo)
-          logger.debug(`Subscription type from usage: ${userInfo.subscriptionType}`)
-        }
-      }
-    } catch {
-      logger.debug('Could not fetch subscription info from usage endpoint')
-    }
-  }
 }
 
 export const authService = new AuthService()

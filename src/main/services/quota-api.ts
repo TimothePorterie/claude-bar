@@ -101,7 +101,18 @@ export class QuotaService {
         return null
       }
 
-      const data = (await response.json()) as UsageResponse
+      const rawData = (await response.json()) as Record<string, unknown>
+
+      // Log full response keys once to help debug subscription type detection
+      logger.debug(`Usage API response keys: ${Object.keys(rawData).join(', ')}`)
+
+      const data = rawData as unknown as UsageResponse
+
+      // Extract subscription_type if present in the response
+      if (typeof rawData.subscription_type === 'string' && getAuthMode() === 'app') {
+        authService.updateUserInfo({ subscriptionType: rawData.subscription_type })
+        logger.debug(`Subscription type from usage API: ${rawData.subscription_type}`)
+      }
 
       const newFiveHourReset = new Date(data.five_hour.resets_at)
       const newSevenDayReset = new Date(data.seven_day.resets_at)
