@@ -1,29 +1,33 @@
 import Store from 'electron-store'
 
+interface PersistedQuotaData {
+  fiveHour: { utilization: number; resetsAt: string }
+  sevenDay: { utilization: number; resetsAt: string }
+  fetchedAt: number
+}
+
 interface SettingsStoreSchema {
   refreshInterval: number
   launchAtLogin: boolean
-  notificationsEnabled: boolean
-  warningThreshold: number
-  criticalThreshold: number
-  adaptiveRefresh: boolean
-  showTimeToCritical: boolean
-  authMode: 'app' | 'cli'
+  rateLimitedUntil: number
+  lastQuotaData: PersistedQuotaData | null
+  displayMode: string
 }
+
+export type { PersistedQuotaData }
 
 export const settingsStore = new Store<SettingsStoreSchema>({
   defaults: {
-    refreshInterval: 60,
+    refreshInterval: 300,
     launchAtLogin: false,
-    notificationsEnabled: true,
-    warningThreshold: 70,
-    criticalThreshold: 90,
-    adaptiveRefresh: true,
-    showTimeToCritical: true,
-    authMode: 'app'
+    rateLimitedUntil: 0,
+    lastQuotaData: null,
+    displayMode: 'standard'
   }
 })
 
-export function getAuthMode(): 'app' | 'cli' {
-  return settingsStore.get('authMode')
+// Migrate: bump aggressive intervals (30s, 60s) to 300s to avoid rate limiting
+const currentInterval = settingsStore.get('refreshInterval')
+if (currentInterval < 120) {
+  settingsStore.set('refreshInterval', 300)
 }

@@ -1,29 +1,17 @@
 import { quotaService } from './quota-api'
-import { notificationService, QuotaLevel } from './notifications'
 import { logger } from './logger'
 
 type RefreshCallback = () => void
 
-export interface PauseStatus {
-  paused: boolean
-  resumeAt: number | null // timestamp when auto-resume, null if indefinite
-  remainingMs: number | null
-}
-
 export class SchedulerService {
   private intervalId: NodeJS.Timeout | null = null
-  private pauseTimeoutId: NodeJS.Timeout | null = null
-  private refreshIntervalMs: number = 60000 // Default 1 minute
-  private baseIntervalMs: number = 60000 // User-configured interval
+  private rateLimitRetryId: NodeJS.Timeout | null = null
+  private refreshIntervalMs: number = 300000
   private callbacks: Set<RefreshCallback> = new Set()
-  private adaptiveEnabled: boolean = true
-  private currentQuotaLevel: QuotaLevel = 'normal'
-  private paused: boolean = false
-  private resumeAt: number | null = null
+  private consecutive429s: number = 0
 
   setRefreshInterval(seconds: number): void {
-    this.baseIntervalMs = seconds * 1000
-    this.refreshIntervalMs = this.getAdaptiveInterval()
+    this.refreshIntervalMs = seconds * 1000
     if (this.intervalId) {
       this.stop()
       this.start()
@@ -32,119 +20,6 @@ export class SchedulerService {
 
   getRefreshInterval(): number {
     return this.refreshIntervalMs / 1000
-  }
-
-  getBaseRefreshInterval(): number {
-    return this.baseIntervalMs / 1000
-  }
-
-  setAdaptiveEnabled(enabled: boolean): void {
-    this.adaptiveEnabled = enabled
-    logger.info(`Adaptive refresh ${enabled ? 'enabled' : 'disabled'}`)
-    if (this.intervalId) {
-      this.refreshIntervalMs = this.getAdaptiveInterval()
-      this.stop()
-      this.start()
-    }
-  }
-
-  isAdaptiveEnabled(): boolean {
-    return this.adaptiveEnabled
-  }
-
-  private getAdaptiveInterval(): number {
-    if (!this.adaptiveEnabled) {
-      return this.baseIntervalMs
-    }
-
-    switch (this.currentQuotaLevel) {
-      case 'critical':
-        // Refresh 4x faster at critical, minimum 15 seconds
-        return Math.max(15000, Math.floor(this.baseIntervalMs / 4))
-      case 'warning':
-        // Refresh 2x faster at warning, minimum 30 seconds
-        return Math.max(30000, Math.floor(this.baseIntervalMs / 2))
-      default:
-        return this.baseIntervalMs
-    }
-  }
-
-  updateQuotaLevel(level: QuotaLevel): void {
-    if (level === this.currentQuotaLevel) {
-      return
-    }
-
-    const previousLevel = this.currentQuotaLevel
-    this.currentQuotaLevel = level
-
-    if (this.adaptiveEnabled) {
-      const newInterval = this.getAdaptiveInterval()
-      if (newInterval !== this.refreshIntervalMs) {
-        logger.info(`Adaptive refresh: ${previousLevel} → ${level}, interval ${this.refreshIntervalMs / 1000}s → ${newInterval / 1000}s`)
-        this.refreshIntervalMs = newInterval
-        if (this.intervalId) {
-          this.stop()
-          this.start()
-        }
-      }
-    }
-  }
-
-  getNextRefreshTime(): Date {
-    return new Date(Date.now() + this.refreshIntervalMs)
-  }
-
-  pause(durationMinutes?: number): void {
-    this.paused = true
-    this.stop()
-
-    // Clear any existing pause timeout
-    if (this.pauseTimeoutId) {
-      clearTimeout(this.pauseTimeoutId)
-      this.pauseTimeoutId = null
-    }
-
-    if (durationMinutes && durationMinutes > 0) {
-      this.resumeAt = Date.now() + durationMinutes * 60 * 1000
-      this.pauseTimeoutId = setTimeout(() => {
-        this.resume()
-      }, durationMinutes * 60 * 1000)
-      logger.info(`Monitoring paused for ${durationMinutes} minutes`)
-    } else {
-      this.resumeAt = null
-      logger.info('Monitoring paused indefinitely')
-    }
-
-    this.notifyCallbacks()
-  }
-
-  resume(): void {
-    if (this.pauseTimeoutId) {
-      clearTimeout(this.pauseTimeoutId)
-      this.pauseTimeoutId = null
-    }
-
-    this.paused = false
-    this.resumeAt = null
-    this.start()
-    logger.info('Monitoring resumed')
-  }
-
-  isPaused(): boolean {
-    return this.paused
-  }
-
-  getPauseStatus(): PauseStatus {
-    if (!this.paused) {
-      return { paused: false, resumeAt: null, remainingMs: null }
-    }
-
-    const remainingMs = this.resumeAt ? Math.max(0, this.resumeAt - Date.now()) : null
-    return {
-      paused: true,
-      resumeAt: this.resumeAt,
-      remainingMs
-    }
   }
 
   onRefresh(callback: RefreshCallback): void {
@@ -174,15 +49,60 @@ export class SchedulerService {
       clearInterval(this.intervalId)
       this.intervalId = null
     }
+    if (this.rateLimitRetryId) {
+      clearTimeout(this.rateLimitRetryId)
+      this.rateLimitRetryId = null
+    }
   }
 
   async refresh(): Promise<void> {
     try {
-      await quotaService.fetchQuota(true)
+      const quota = await quotaService.fetchQuota()
+
+      // Check if we got rate limited
+      const cooldownMs = quotaService.getRateLimitRemainingMs()
+      if (cooldownMs > 0) {
+        this.consecutive429s++
+        // Stop the regular interval to avoid noise during cooldown
+        this.stopInterval()
+
+        // Exponential backoff: add extra margin on repeated 429s
+        // 1st: retry-after + 5s, 2nd: retry-after + 15s, 3rd: retry-after + 45s, etc.
+        const backoffMarginMs = Math.min(5000 * Math.pow(3, this.consecutive429s - 1), 300000)
+        const retryInMs = cooldownMs + backoffMarginMs
+
+        if (!this.rateLimitRetryId) {
+          logger.info(`Rate limited (${this.consecutive429s}x) — retry in ${Math.ceil(retryInMs / 1000)}s (cooldown ${Math.ceil(cooldownMs / 1000)}s + backoff ${Math.ceil(backoffMarginMs / 1000)}s)`)
+          this.rateLimitRetryId = setTimeout(() => {
+            this.rateLimitRetryId = null
+            this.refresh()
+          }, retryInMs)
+        }
+      } else {
+        // Success — reset backoff and restart interval if needed
+        this.consecutive429s = 0
+        this.restartInterval()
+      }
+
       this.notifyCallbacks()
     } catch (error) {
       console.error('Scheduled refresh failed:', error)
+      this.notifyCallbacks()
     }
+  }
+
+  private stopInterval(): void {
+    if (this.intervalId) {
+      clearInterval(this.intervalId)
+      this.intervalId = null
+    }
+  }
+
+  private restartInterval(): void {
+    if (this.intervalId) return // Already running
+    this.intervalId = setInterval(() => {
+      this.refresh()
+    }, this.refreshIntervalMs)
   }
 
   private notifyCallbacks(): void {

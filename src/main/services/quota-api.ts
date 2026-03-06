@@ -1,10 +1,7 @@
 import { keychainService, Credentials } from './keychain'
-import { authService } from './auth'
 import { logger } from './logger'
-import { notificationService } from './notifications'
-import { historyService } from './history'
-import { schedulerService } from './scheduler'
-import { getAuthMode } from './settings-store'
+import { settingsStore, PersistedQuotaData } from './settings-store'
+import { probeCliUsage } from './cli-probe'
 
 export interface QuotaData {
   utilization: number
@@ -29,72 +26,157 @@ export interface QuotaInfo {
     utilization: number
     resetsAt: Date
     resetsIn: string
-    resetProgress: number // 0-100, percentage of time elapsed in the period
+    resetProgress: number
   }
   sevenDay: {
     utilization: number
     resetsAt: Date
     resetsIn: string
-    resetProgress: number // 0-100, percentage of time elapsed in the period
+    resetProgress: number
   }
   lastUpdated: Date
   error?: QuotaError
 }
 
-interface RetryConfig {
-  maxRetries: number
-  baseDelay: number
-  maxDelay: number
-}
+const WARNING_THRESHOLD = 70
+const CRITICAL_THRESHOLD = 90
+const MIN_FETCH_INTERVAL_MS = 120000 // 2min minimum between API calls, always enforced
+const MIN_429_COOLDOWN_SEC = 300 // 5min minimum cooldown on rate limit (server returns retry-after: 0 which is misleading)
 
 export class QuotaService {
   private static readonly API_URL = 'https://api.anthropic.com/api/oauth/usage'
   private static readonly BETA_HEADER = 'oauth-2025-04-20'
-  private static readonly DEFAULT_RETRY_CONFIG: RetryConfig = {
-    maxRetries: 3,
-    baseDelay: 1000,
-    maxDelay: 8000
-  }
 
   private cachedQuota: QuotaInfo | null = null
   private lastFetchTime: number = 0
-  private lastSuccessfulFetch: number = 0
   private lastError: QuotaError | null = null
-  private minFetchInterval = 30000 // 30 seconds minimum between fetches
+  private rateLimitedUntil: number
+  private pendingFetch: Promise<QuotaInfo | null> | null = null
 
-  async fetchQuota(forceRefresh = false): Promise<QuotaInfo | null> {
-    // Check cache
-    if (!forceRefresh && this.cachedQuota && Date.now() - this.lastFetchTime < this.minFetchInterval) {
-      logger.debug('Returning cached quota')
-      return this.cachedQuota
-    }
-
-    // Use only the auth source selected by the user (no fallback)
-    let credentials: Credentials | null = null
-    let tokenSource: 'app' | 'keychain' = 'keychain'
-    const authMode = getAuthMode()
-
-    if (authMode === 'app') {
-      const appToken = await authService.getValidAccessToken()
-      if (appToken) {
-        credentials = { accessToken: appToken }
-        tokenSource = 'app'
-      }
+  constructor() {
+    // Restore persisted rate limit, but clear if already expired
+    const persisted = settingsStore.get('rateLimitedUntil')
+    if (persisted > Date.now()) {
+      this.rateLimitedUntil = persisted
+      logger.info(`Restored rate limit cooldown: ${Math.ceil((persisted - Date.now()) / 1000)}s remaining`)
     } else {
-      credentials = await keychainService.getValidCredentials()
-      tokenSource = 'keychain'
+      this.rateLimitedUntil = 0
+      settingsStore.set('rateLimitedUntil', 0)
     }
 
-    if (!credentials || !credentials.accessToken) {
-      logger.error('No credentials available')
-      this.lastError = { type: 'auth', message: 'No credentials found. Please log in.', retryable: false }
+    // Restore persisted quota data (if < 24h old)
+    const lastQuota = settingsStore.get('lastQuotaData') as PersistedQuotaData | null
+    if (lastQuota && Date.now() - lastQuota.fetchedAt < 24 * 60 * 60 * 1000) {
+      const fiveHourReset = new Date(lastQuota.fiveHour.resetsAt)
+      const sevenDayReset = new Date(lastQuota.sevenDay.resetsAt)
+      this.cachedQuota = {
+        fiveHour: {
+          utilization: lastQuota.fiveHour.utilization,
+          resetsAt: fiveHourReset,
+          resetsIn: this.formatTimeUntil(fiveHourReset),
+          resetProgress: this.calculateResetProgress(fiveHourReset, 5)
+        },
+        sevenDay: {
+          utilization: lastQuota.sevenDay.utilization,
+          resetsAt: sevenDayReset,
+          resetsIn: this.formatTimeUntil(sevenDayReset),
+          resetProgress: this.calculateResetProgress(sevenDayReset, 7 * 24)
+        },
+        lastUpdated: new Date(lastQuota.fetchedAt)
+      }
+      this.lastFetchTime = lastQuota.fetchedAt
+      logger.info(`Restored persisted quota: 5h=${Math.round(lastQuota.fiveHour.utilization)}%, 7d=${Math.round(lastQuota.sevenDay.utilization)}% (${Math.round((Date.now() - lastQuota.fetchedAt) / 60000)}min ago)`)
+    }
+  }
+
+  async fetchQuota(force = false): Promise<QuotaInfo | null> {
+    // If a fetch is already in progress, wait for its result (dedup concurrent calls)
+    if (this.pendingFetch) {
+      return this.pendingFetch
+    }
+
+    // Enforce minimum interval between fetches — bypass when force=true (manual refresh)
+    if (!force && this.cachedQuota && Date.now() - this.lastFetchTime < MIN_FETCH_INTERVAL_MS) {
+      return this.getCachedQuota()!
+    }
+
+    this.pendingFetch = this.doFetch()
+    try {
+      return await this.pendingFetch
+    } finally {
+      this.pendingFetch = null
+    }
+  }
+
+  private async doFetch(): Promise<QuotaInfo | null> {
+    // Strategy 1: Try CLI probe first (no rate limit, no API call)
+    const cliResult = await probeCliUsage()
+    if (cliResult && (cliResult.sessionPercent !== null || cliResult.weeklyPercent !== null)) {
+      return this.applyCliResult(cliResult)
+    }
+
+    // Strategy 2: Fall back to API (respecting rate limit cooldown)
+    if (Date.now() < this.rateLimitedUntil) {
+      if (this.cachedQuota) {
+        return this.getCachedQuota()!
+      }
       return null
     }
+    return this.doApiFetch()
+  }
 
+  private applyCliResult(cliResult: { sessionPercent: number | null; weeklyPercent: number | null }): QuotaInfo {
+    const now = new Date()
+
+    // Use CLI percentages, keep existing resetsAt from cache if available
+    const fiveHourResetsAt = this.cachedQuota?.fiveHour.resetsAt ?? new Date(now.getTime() + 5 * 60 * 60 * 1000)
+    const sevenDayResetsAt = this.cachedQuota?.sevenDay.resetsAt ?? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+    const fiveHourUtil = cliResult.sessionPercent ?? this.cachedQuota?.fiveHour.utilization ?? 0
+    const sevenDayUtil = cliResult.weeklyPercent ?? this.cachedQuota?.sevenDay.utilization ?? 0
+
+    this.cachedQuota = {
+      fiveHour: {
+        utilization: fiveHourUtil,
+        resetsAt: fiveHourResetsAt,
+        resetsIn: this.formatTimeUntil(fiveHourResetsAt),
+        resetProgress: this.calculateResetProgress(fiveHourResetsAt, 5)
+      },
+      sevenDay: {
+        utilization: sevenDayUtil,
+        resetsAt: sevenDayResetsAt,
+        resetsIn: this.formatTimeUntil(sevenDayResetsAt),
+        resetProgress: this.calculateResetProgress(sevenDayResetsAt, 7 * 24)
+      },
+      lastUpdated: now
+    }
+
+    this.lastFetchTime = Date.now()
+    this.lastError = null
+
+    // Persist (use ISO string for resetsAt)
+    settingsStore.set('lastQuotaData', {
+      fiveHour: { utilization: fiveHourUtil, resetsAt: fiveHourResetsAt.toISOString() },
+      sevenDay: { utilization: sevenDayUtil, resetsAt: sevenDayResetsAt.toISOString() },
+      fetchedAt: this.lastFetchTime
+    })
+
+    logger.info(`Quota fetched (CLI): 5h=${Math.round(fiveHourUtil)}%, 7d=${Math.round(sevenDayUtil)}%`)
+    return this.cachedQuota
+  }
+
+  private async doApiFetch(): Promise<QuotaInfo | null> {
     try {
-      const response = await this.fetchWithRetry(credentials, undefined, tokenSource)
+      const credentials = await keychainService.getValidCredentials()
+
+      if (!credentials || !credentials.accessToken) {
+        logger.error('No credentials available in Keychain')
+        this.lastError = { type: 'auth', message: 'No credentials found. Please log in.', retryable: false }
+        return null
+      }
+
+      const response = await this.fetchOnce(credentials)
       if (!response) {
-        // fetchWithRetry already set lastError — return cached quota if available
         if (this.cachedQuota && this.lastError) {
           return { ...this.cachedQuota, error: this.lastError }
         }
@@ -102,35 +184,7 @@ export class QuotaService {
       }
 
       const rawData = (await response.json()) as Record<string, unknown>
-
-
       const data = rawData as unknown as UsageResponse
-
-      // Extract subscription info from the response
-      if (getAuthMode() === 'app' && !authService.getUserInfo()?.subscriptionType) {
-        // Try explicit field names first
-        const subType =
-          (typeof rawData.subscription_type === 'string' && rawData.subscription_type) ||
-          (typeof rawData.subscriptionType === 'string' && rawData.subscriptionType) ||
-          (typeof rawData.plan === 'string' && rawData.plan) ||
-          (typeof rawData.tier === 'string' && rawData.tier) ||
-          null
-
-        if (subType) {
-          authService.updateUserInfo({ subscriptionType: subType })
-          logger.debug(`Subscription type from usage API: ${subType}`)
-        } else {
-          // Deduce from response shape: extra_usage field indicates Max plan
-          const extraUsage = rawData.extra_usage as Record<string, unknown> | null | undefined
-          if (extraUsage && typeof extraUsage === 'object') {
-            authService.updateUserInfo({ subscriptionType: 'max' })
-            logger.debug('Subscription type deduced from usage API: max (extra_usage present)')
-          } else {
-            authService.updateUserInfo({ subscriptionType: 'pro' })
-            logger.debug('Subscription type deduced from usage API: pro (no extra_usage)')
-          }
-        }
-      }
 
       const newFiveHourReset = new Date(data.five_hour.resets_at)
       const newSevenDayReset = new Date(data.seven_day.resets_at)
@@ -152,21 +206,19 @@ export class QuotaService {
       }
 
       this.lastFetchTime = Date.now()
-      this.lastSuccessfulFetch = Date.now()
       this.lastError = null
+      this.rateLimitedUntil = 0
+      settingsStore.set('rateLimitedUntil', 0)
 
-      // Record in history
-      historyService.addEntry(data.five_hour.utilization, data.seven_day.utilization)
-
-      // Check and send notifications
-      notificationService.checkAndNotify(data.five_hour.utilization, data.seven_day.utilization)
-
-      // Update scheduler with current quota level for adaptive refresh
-      const level = this.getQuotaLevel()
-      schedulerService.updateQuotaLevel(level)
+      // Persist quota data for next startup
+      settingsStore.set('lastQuotaData', {
+        fiveHour: { utilization: data.five_hour.utilization, resetsAt: data.five_hour.resets_at },
+        sevenDay: { utilization: data.seven_day.utilization, resetsAt: data.seven_day.resets_at },
+        fetchedAt: this.lastFetchTime
+      })
 
       logger.info(
-        `Quota fetched: 5h=${Math.round(data.five_hour.utilization)}%, 7d=${Math.round(data.seven_day.utilization)}%`
+        `Quota fetched (API): 5h=${Math.round(data.five_hour.utilization)}%, 7d=${Math.round(data.seven_day.utilization)}%`
       )
 
       return this.cachedQuota
@@ -174,7 +226,6 @@ export class QuotaService {
       logger.error('Failed to fetch quota:', error)
       this.lastError = this.classifyError(error)
 
-      // Return cached quota with error attached if available
       if (this.cachedQuota) {
         return { ...this.cachedQuota, error: this.lastError }
       }
@@ -182,11 +233,91 @@ export class QuotaService {
     }
   }
 
+  /**
+   * Single API call with one token-refresh retry on 401.
+   * No exponential backoff, no multi-retry loop.
+   */
+  private async fetchOnce(credentials: Credentials): Promise<Response | null> {
+    const doRequest = async (creds: Credentials): Promise<Response> => {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      try {
+        return await fetch(QuotaService.API_URL, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${creds.accessToken}`,
+            'anthropic-beta': QuotaService.BETA_HEADER,
+            'Content-Type': 'application/json'
+          },
+          signal: controller.signal
+        })
+      } finally {
+        clearTimeout(timeoutId)
+      }
+    }
+
+    try {
+      let response = await doRequest(credentials)
+
+      if (response.ok) {
+        const remaining = response.headers.get('anthropic-ratelimit-requests-remaining')
+        const reset = response.headers.get('anthropic-ratelimit-requests-reset')
+        if (remaining || reset) {
+          logger.info(`Rate limit budget: remaining=${remaining}, reset=${reset}`)
+        }
+        return response
+      }
+
+      // On 401, try refreshing token once
+      if (response.status === 401) {
+        logger.warn('Authentication failed — attempting token refresh')
+        const refreshed = await keychainService.refreshToken(credentials)
+        if (refreshed) {
+          response = await doRequest(refreshed)
+          if (response.ok) {
+            return response
+          }
+        }
+        this.lastError = { type: 'auth', message: 'Session expired. Please log in again.', retryable: false }
+        return null
+      }
+
+      // Handle rate limiting
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('retry-after')
+        const serverSec = retryAfter ? parseInt(retryAfter, 10) || 0 : 0
+        const cooldownSec = Math.max(serverSec, MIN_429_COOLDOWN_SEC)
+        this.rateLimitedUntil = Date.now() + cooldownSec * 1000
+        settingsStore.set('rateLimitedUntil', this.rateLimitedUntil)
+        // Log all rate-limit headers for diagnosis
+        const rlHeaders = ['anthropic-ratelimit-requests-limit', 'anthropic-ratelimit-requests-remaining', 'anthropic-ratelimit-requests-reset', 'retry-after']
+        const rlInfo = rlHeaders.map(h => `${h}=${response.headers.get(h)}`).join(', ')
+        logger.warn(`Rate limited (429), cooldown ${cooldownSec}s | ${rlInfo}`)
+        this.lastError = { type: 'rate_limit', message: this.formatRateLimitMessage(), retryable: true }
+        return null
+      }
+
+      // All other errors — no retry
+      const errorText = await response.text()
+      logger.error(`API error: ${response.status} - ${errorText}`)
+      this.lastError = this.classifyError(new Error(`HTTP ${response.status}: ${errorText}`))
+      return null
+    } catch (error) {
+      logger.error('Network error:', error)
+      this.lastError = this.classifyError(error)
+      return null
+    }
+  }
+
   private classifyError(error: unknown): QuotaError {
     const errorMessage = error instanceof Error ? error.message : String(error)
 
-    if (errorMessage.includes('network') || errorMessage.includes('ENOTFOUND') || errorMessage.includes('ECONNREFUSED')) {
+    if (errorMessage.includes('network') || errorMessage.includes('ENOTFOUND') || errorMessage.includes('ECONNREFUSED') || errorMessage.includes('fetch')) {
       return { type: 'network', message: 'Unable to connect. Check your internet connection.', retryable: true }
+    }
+
+    if (errorMessage.includes('AbortError') || errorMessage.includes('abort')) {
+      return { type: 'network', message: 'Request timed out. Will retry automatically.', retryable: true }
     }
 
     if (errorMessage.includes('401') || errorMessage.includes('authentication') || errorMessage.includes('token')) {
@@ -197,7 +328,7 @@ export class QuotaService {
       return { type: 'rate_limit', message: 'Rate limited. Will retry automatically.', retryable: true }
     }
 
-    if (errorMessage.includes('5')) {
+    if (/\b5\d{2}\b/.test(errorMessage)) {
       return { type: 'server', message: 'Server error. Will retry automatically.', retryable: true }
     }
 
@@ -205,102 +336,25 @@ export class QuotaService {
   }
 
   getLastError(): QuotaError | null {
+    // Return dynamic message for rate limit errors
+    if (this.lastError?.type === 'rate_limit' && this.rateLimitedUntil > 0) {
+      return { ...this.lastError, message: this.formatRateLimitMessage() }
+    }
     return this.lastError
   }
 
-  getLastSuccessfulFetch(): number {
-    return this.lastSuccessfulFetch
+  getRateLimitRemainingMs(): number {
+    return Math.max(0, this.rateLimitedUntil - Date.now())
   }
 
-  private async fetchWithRetry(
-    credentials: Credentials,
-    config: RetryConfig = QuotaService.DEFAULT_RETRY_CONFIG,
-    tokenSource: 'app' | 'keychain' = 'keychain'
-  ): Promise<Response | null> {
-    let lastError: Error | null = null
-    let tokenRefreshAttempted = false
-
-    for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
-      try {
-        const response = await fetch(QuotaService.API_URL, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${credentials.accessToken}`,
-            'anthropic-beta': QuotaService.BETA_HEADER,
-            'Content-Type': 'application/json'
-          }
-        })
-
-        if (response.ok) {
-          if (attempt > 0) {
-            logger.info(`API call succeeded on attempt ${attempt + 1}`)
-          }
-          return response
-        }
-
-        const errorText = await response.text()
-
-        if (response.status === 401) {
-          if (tokenRefreshAttempted) {
-            logger.error('Authentication failed after token refresh — giving up')
-            this.lastError = { type: 'auth', message: 'Session expired. Please log in again.', retryable: false }
-            return null
-          }
-          logger.error('Authentication failed - token may be expired')
-          tokenRefreshAttempted = true
-
-          if (tokenSource === 'app') {
-            // Refresh via auth service
-            const refreshed = await authService.refreshTokens()
-            if (refreshed) {
-              const newToken = await authService.getValidAccessToken()
-              if (newToken) {
-                credentials = { accessToken: newToken }
-                continue
-              }
-            }
-          } else {
-            // Refresh via keychain (original behavior)
-            const refreshed = await keychainService.refreshToken(credentials)
-            if (refreshed) {
-              credentials = refreshed
-              continue
-            }
-          }
-          this.lastError = { type: 'auth', message: 'Token refresh failed. Please log in again.', retryable: false }
-          return null
-        }
-
-        // Don't retry for client errors (except 401, 429)
-        if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-          logger.error(`API error: ${response.status} - ${errorText}`)
-          this.lastError = { type: 'unknown', message: `API error: ${response.status}`, retryable: false }
-          return null
-        }
-
-        // Retry for server errors and rate limiting
-        logger.warn(`API error (attempt ${attempt + 1}): ${response.status} - ${errorText}`)
-        lastError = new Error(`HTTP ${response.status}: ${errorText}`)
-      } catch (error) {
-        lastError = error as Error
-        logger.warn(`Network error (attempt ${attempt + 1}):`, error)
-      }
-
-      // Calculate delay with exponential backoff
-      if (attempt < config.maxRetries) {
-        const delay = Math.min(config.baseDelay * Math.pow(2, attempt), config.maxDelay)
-        logger.debug(`Retrying in ${delay}ms...`)
-        await this.sleep(delay)
-      }
+  private formatRateLimitMessage(): string {
+    const remainingMs = this.getRateLimitRemainingMs()
+    if (remainingMs <= 0) return 'Rate limited. Retrying...'
+    const remainingSec = Math.ceil(remainingMs / 1000)
+    if (remainingSec >= 60) {
+      return `Rate limited. Retry in ${Math.ceil(remainingSec / 60)}min.`
     }
-
-    logger.error(`All ${config.maxRetries + 1} attempts failed`, lastError)
-    this.lastError = lastError ? this.classifyError(lastError) : { type: 'unknown', message: 'All retry attempts failed.', retryable: true }
-    return null
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms))
+    return `Rate limited. Retry in ${remainingSec}s.`
   }
 
   private formatTimeUntil(date: Date): string {
@@ -334,7 +388,6 @@ export class QuotaService {
     const periodMs = periodHours * 60 * 60 * 1000
     const startTime = resetTime - periodMs
 
-    // Calculate how much of the period has elapsed
     const elapsed = now - startTime
     const progress = Math.max(0, Math.min(100, (elapsed / periodMs) * 100))
 
@@ -342,43 +395,32 @@ export class QuotaService {
   }
 
   getCachedQuota(): QuotaInfo | null {
-    return this.cachedQuota
+    if (!this.cachedQuota) return null
+    // Recalculate time-dependent fields on every read
+    return {
+      ...this.cachedQuota,
+      fiveHour: {
+        ...this.cachedQuota.fiveHour,
+        resetsIn: this.formatTimeUntil(this.cachedQuota.fiveHour.resetsAt),
+        resetProgress: this.calculateResetProgress(this.cachedQuota.fiveHour.resetsAt, 5)
+      },
+      sevenDay: {
+        ...this.cachedQuota.sevenDay,
+        resetsIn: this.formatTimeUntil(this.cachedQuota.sevenDay.resetsAt),
+        resetProgress: this.calculateResetProgress(this.cachedQuota.sevenDay.resetsAt, 7 * 24)
+      }
+    }
   }
 
-  getFormattedTitle(compact = false): string {
+  getFormattedTitle(): string {
     if (!this.cachedQuota) {
-      return compact ? '--' : '-- / --'
+      return '-- / --'
     }
 
     const fiveHour = Math.round(this.cachedQuota.fiveHour.utilization)
     const sevenDay = Math.round(this.cachedQuota.sevenDay.utilization)
-
-    if (compact) {
-      // Show session (5-hour) utilization in compact mode
-      return `${fiveHour}%`
-    }
 
     return `${fiveHour}% / ${sevenDay}%`
-  }
-
-  getDetailedTitle(): string {
-    if (!this.cachedQuota) {
-      return '5h: --% | 7d: --%'
-    }
-
-    const fiveHour = Math.round(this.cachedQuota.fiveHour.utilization)
-    const sevenDay = Math.round(this.cachedQuota.sevenDay.utilization)
-
-    return `5h: ${fiveHour}% | 7d: ${sevenDay}%`
-  }
-
-  getTimeRemainingTitle(): string {
-    if (!this.cachedQuota) {
-      return '--'
-    }
-
-    // Show time until session (5-hour) quota resets
-    return this.cachedQuota.fiveHour.resetsIn
   }
 
   getQuotaLevel(): 'normal' | 'warning' | 'critical' {
@@ -391,85 +433,9 @@ export class QuotaService {
       this.cachedQuota.sevenDay.utilization
     )
 
-    // Use notification service's getLevel to respect user's threshold settings
-    return notificationService.getLevel(maxUtilization)
-  }
-
-  getEnhancedTooltip(): string {
-    if (!this.cachedQuota) {
-      if (this.lastError) {
-        return `Claude Bar — ${this.lastError.message}`
-      }
-      return 'Claude Bar — Click to view quotas'
-    }
-
-    const fiveHour = Math.round(this.cachedQuota.fiveHour.utilization)
-    const sevenDay = Math.round(this.cachedQuota.sevenDay.utilization)
-    const fiveHourReset = this.cachedQuota.fiveHour.resetsIn
-    const sevenDayReset = this.cachedQuota.sevenDay.resetsIn
-
-    // Get trend data
-    const trend = historyService.getTrend(30)
-    const fiveHourTrend = trend ? this.getTrendSymbol(trend.fiveHour.direction) : ''
-    const sevenDayTrend = trend ? this.getTrendSymbol(trend.sevenDay.direction) : ''
-
-    const lines = [
-      `Session: ${fiveHour}%${fiveHourTrend} (resets in ${fiveHourReset})`,
-      `Weekly: ${sevenDay}%${sevenDayTrend} (resets in ${sevenDayReset})`
-    ]
-
-    // Add time to critical if applicable
-    const thresholds = notificationService.getThresholds()
-    const ttc = historyService.estimateTimeToThreshold(thresholds.critical)
-    if (ttc) {
-      const estimates = [ttc.fiveHour, ttc.sevenDay].filter((v): v is number => v !== null)
-      if (estimates.length > 0) {
-        const minTime = Math.min(...estimates)
-        lines.push(`Est. critical: ~${this.formatHoursShort(minTime)}`)
-      }
-    }
-
-    // Add next refresh info
-    const nextRefresh = schedulerService.getNextRefreshTime()
-    const secondsUntilRefresh = Math.max(0, Math.round((nextRefresh.getTime() - Date.now()) / 1000))
-    if (!schedulerService.isPaused()) {
-      lines.push(`Next refresh: ${secondsUntilRefresh}s`)
-    } else {
-      const pauseStatus = schedulerService.getPauseStatus()
-      if (pauseStatus.remainingMs) {
-        const minutes = Math.ceil(pauseStatus.remainingMs / 60000)
-        lines.push(`Paused (${minutes}m remaining)`)
-      } else {
-        lines.push('Paused')
-      }
-    }
-
-    lines.push(`Last updated: ${this.cachedQuota.lastUpdated.toLocaleTimeString()}`)
-
-    return lines.join('\n')
-  }
-
-  private getTrendSymbol(direction: 'up' | 'down' | 'stable'): string {
-    switch (direction) {
-      case 'up':
-        return '↑'
-      case 'down':
-        return '↓'
-      case 'stable':
-        return '→'
-    }
-  }
-
-  private formatHoursShort(hours: number): string {
-    if (hours < 1) {
-      return `${Math.round(hours * 60)}m`
-    }
-    const h = Math.floor(hours)
-    const m = Math.round((hours - h) * 60)
-    if (m === 0) {
-      return `${h}h`
-    }
-    return `${h}h ${m}m`
+    if (maxUtilization >= CRITICAL_THRESHOLD) return 'critical'
+    if (maxUtilization >= WARNING_THRESHOLD) return 'warning'
+    return 'normal'
   }
 }
 

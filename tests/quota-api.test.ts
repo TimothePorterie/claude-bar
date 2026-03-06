@@ -1,10 +1,7 @@
-import { describe, it, expect, vi } from 'vitest'
-
-// We'll test the utility functions that don't require Electron dependencies
+import { describe, it, expect } from 'vitest'
 
 describe('QuotaService utilities', () => {
   describe('formatTimeUntil', () => {
-    // Testing time formatting logic
     function formatTimeUntil(date: Date): string {
       const now = new Date()
       const diffMs = date.getTime() - now.getTime()
@@ -36,37 +33,30 @@ describe('QuotaService utilities', () => {
     })
 
     it('should format minutes correctly', () => {
-      const futureDate = new Date(Date.now() + 30 * 60 * 1000 + 30 * 1000) // 30m + buffer
+      const futureDate = new Date(Date.now() + 30 * 60 * 1000 + 30 * 1000)
       expect(formatTimeUntil(futureDate)).toBe('30m')
     })
 
     it('should format hours and minutes correctly', () => {
-      const futureDate = new Date(Date.now() + 2 * 60 * 60 * 1000 + 30 * 60 * 1000 + 30 * 1000) // 2h 30m + buffer
+      const futureDate = new Date(Date.now() + 2 * 60 * 60 * 1000 + 30 * 60 * 1000 + 30 * 1000)
       expect(formatTimeUntil(futureDate)).toBe('2h 30m')
     })
 
     it('should format days and hours correctly', () => {
-      const futureDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 5 * 60 * 60 * 1000 + 30 * 1000) // 2d 5h + buffer
+      const futureDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 5 * 60 * 60 * 1000 + 30 * 1000)
       expect(formatTimeUntil(futureDate)).toBe('2d 5h')
     })
   })
 
   describe('getQuotaLevel', () => {
-    // Testing quota level determination logic
     function getQuotaLevel(
       fiveHour: number,
       sevenDay: number
     ): 'normal' | 'warning' | 'critical' {
       const maxUtilization = Math.max(fiveHour, sevenDay)
 
-      if (maxUtilization >= 90) {
-        return 'critical'
-      }
-
-      if (maxUtilization >= 70) {
-        return 'warning'
-      }
-
+      if (maxUtilization >= 90) return 'critical'
+      if (maxUtilization >= 70) return 'warning'
       return 'normal'
     }
 
@@ -96,35 +86,24 @@ describe('QuotaService utilities', () => {
   describe('getFormattedTitle', () => {
     function getFormattedTitle(
       fiveHour: number | null,
-      sevenDay: number | null,
-      compact = false
+      sevenDay: number | null
     ): string {
       if (fiveHour === null || sevenDay === null) {
-        return compact ? '--' : '-- / --'
+        return '-- / --'
       }
 
       const fh = Math.round(fiveHour)
       const sd = Math.round(sevenDay)
-
-      if (compact) {
-        return `${Math.max(fh, sd)}%`
-      }
 
       return `${fh}% / ${sd}%`
     }
 
     it('should return placeholder for null values', () => {
       expect(getFormattedTitle(null, null)).toBe('-- / --')
-      expect(getFormattedTitle(null, null, true)).toBe('--')
     })
 
     it('should format standard title correctly', () => {
       expect(getFormattedTitle(45.6, 32.3)).toBe('46% / 32%')
-    })
-
-    it('should format compact title with max value', () => {
-      expect(getFormattedTitle(45, 32, true)).toBe('45%')
-      expect(getFormattedTitle(32, 45, true)).toBe('45%')
     })
   })
 })

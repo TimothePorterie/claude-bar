@@ -49,7 +49,7 @@ export class AuthService {
   private state: AuthState = 'unauthenticated'
   private codeVerifier: string | null = null
   private stateParam: string | null = null
-  private isRefreshing = false
+  private refreshPromise: Promise<boolean> | null = null
   private stateCallbacks: StateChangeCallback[] = []
 
   initialize(): void {
@@ -217,18 +217,27 @@ export class AuthService {
       return false
     }
 
-    if (this.isRefreshing) {
-      logger.debug('Auth token refresh already in progress')
-      return false
+    // If a refresh is already in progress, all callers await the same promise
+    if (this.refreshPromise) {
+      logger.debug('Auth token refresh already in progress, awaiting existing promise')
+      return this.refreshPromise
     }
 
-    this.isRefreshing = true
+    this.refreshPromise = this.doRefreshTokens(tokens.refreshToken)
+    try {
+      return await this.refreshPromise
+    } finally {
+      this.refreshPromise = null
+    }
+  }
+
+  private async doRefreshTokens(encryptedRefreshToken: string): Promise<boolean> {
     this.setState('refreshing')
 
     try {
       let refreshToken: string
       try {
-        refreshToken = this.decryptToken(tokens.refreshToken)
+        refreshToken = this.decryptToken(encryptedRefreshToken)
       } catch {
         logger.error('Failed to decrypt refresh token')
         this.setState('expired')
@@ -283,8 +292,6 @@ export class AuthService {
       }
       this.setState('expired')
       return false
-    } finally {
-      this.isRefreshing = false
     }
   }
 

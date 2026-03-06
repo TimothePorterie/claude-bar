@@ -54,10 +54,7 @@
         <div class="quota-card" id="fiveHourCard">
           <div class="quota-header">
             <span class="quota-title">Session (5h)</span>
-            <span class="quota-value-wrapper">
-              <span class="quota-value" id="fiveHourValue">--%</span>
-              <span class="trend-indicator" id="fiveHourTrend"></span>
-            </span>
+            <span class="quota-value" id="fiveHourValue">--%</span>
           </div>
           <div class="progress-bar">
             <div class="progress-fill" id="fiveHourProgress"></div>
@@ -75,10 +72,7 @@
         <div class="quota-card" id="sevenDayCard">
           <div class="quota-header">
             <span class="quota-title">Weekly (7d)</span>
-            <span class="quota-value-wrapper">
-              <span class="quota-value" id="sevenDayValue">--%</span>
-              <span class="trend-indicator" id="sevenDayTrend"></span>
-            </span>
+            <span class="quota-value" id="sevenDayValue">--%</span>
           </div>
           <div class="progress-bar">
             <div class="progress-fill" id="sevenDayProgress"></div>
@@ -89,33 +83,6 @@
           </div>
           <div class="reset-progress-bar">
             <div class="reset-progress-fill" id="sevenDayResetProgress"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Time to critical warning -->
-      <div class="time-to-critical" id="timeToCritical" style="display: none;">
-        <span class="ttc-icon">⚠️</span>
-        <span class="ttc-text" id="ttcText">Est. critical in ~2h</span>
-      </div>
-
-      <!-- History section -->
-      <div class="history-section" id="historySection" style="display: none;">
-        <div class="history-header">
-          <span class="history-title">Statistics (24h)</span>
-        </div>
-        <div class="history-stats" id="historyStats">
-          <div class="stat">
-            <span class="stat-label">Avg 5h</span>
-            <span class="stat-value" id="avgFiveHour">--%</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Avg 7d</span>
-            <span class="stat-value" id="avgSevenDay">--%</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Peak</span>
-            <span class="stat-value" id="peakUsage">--%</span>
           </div>
         </div>
       </div>
@@ -142,9 +109,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Toast notification -->
-      <div class="toast" id="toast">Updated</div>
 
       <!-- Not connected state -->
       <div class="not-connected" id="notConnected" style="display: none;">

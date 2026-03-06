@@ -5,7 +5,6 @@ const connectionStatus = document.getElementById('connectionStatus') as HTMLElem
 const statusIndicator = document.getElementById('statusIndicator') as HTMLElement
 const statusText = document.getElementById('statusText') as HTMLElement
 const statusEmail = document.getElementById('statusEmail') as HTMLElement
-const authSourceBadge = document.getElementById('authSourceBadge') as HTMLElement
 const logoutBtn = document.getElementById('logoutBtn') as HTMLButtonElement
 const notConnectedHelp = document.getElementById('notConnectedHelp') as HTMLElement
 const loginBtn = document.getElementById('loginBtn') as HTMLButtonElement
@@ -15,45 +14,14 @@ const validateBtn = document.getElementById('validateBtn') as HTMLButtonElement
 const cancelLoginBtn = document.getElementById('cancelLoginBtn') as HTMLButtonElement
 const authError = document.getElementById('authError') as HTMLElement
 const refreshInterval = document.getElementById('refreshInterval') as HTMLSelectElement
-const adaptiveRefresh = document.getElementById('adaptiveRefresh') as HTMLInputElement
-const notificationsEnabled = document.getElementById('notificationsEnabled') as HTMLInputElement
 const launchAtLogin = document.getElementById('launchAtLogin') as HTMLInputElement
-const warningThreshold = document.getElementById('warningThreshold') as HTMLInputElement
-const warningValue = document.getElementById('warningValue') as HTMLElement
-const criticalThreshold = document.getElementById('criticalThreshold') as HTMLInputElement
-const criticalValue = document.getElementById('criticalValue') as HTMLElement
-const showTimeToCritical = document.getElementById('showTimeToCritical') as HTMLInputElement
-const appVersion = document.getElementById('appVersion') as HTMLElement
-const updateText = document.getElementById('updateText') as HTMLElement
-const updateProgress = document.getElementById('updateProgress') as HTMLElement
-const updateProgressBar = document.getElementById('updateProgressBar') as HTMLElement
-const updateBtn = document.getElementById('updateBtn') as HTMLButtonElement
-const checkBtn = document.getElementById('checkBtn') as HTMLButtonElement
-const authModeSelect = document.getElementById('authMode') as HTMLSelectElement
 
-let downloadingVersion: string | null = null
-
-function showConnectedUI(
-  email: string,
-  authSource: string
-): void {
+function showConnectedUI(email: string): void {
   connectionStatus.style.display = 'flex'
   statusIndicator.classList.add('connected')
   statusText.textContent = 'Connected'
   statusEmail.textContent = email
-
-  // Show auth source badge
-  if (authSource === 'app') {
-    authSourceBadge.textContent = 'via Claude Bar'
-    authSourceBadge.style.display = 'inline'
-  } else {
-    authSourceBadge.textContent = 'via CLI'
-    authSourceBadge.style.display = 'inline'
-  }
-
-  // Only show logout button in app mode (CLI logout is managed by CLI)
-  const currentMode = authModeSelect.value
-  logoutBtn.style.display = (authSource === 'app' && currentMode === 'app') ? 'block' : 'none'
+  logoutBtn.style.display = 'block'
   notConnectedHelp.style.display = 'none'
   authCodeSection.style.display = 'none'
 }
@@ -63,24 +31,10 @@ function showNotConnectedUI(): void {
   statusIndicator.classList.remove('connected')
   statusText.textContent = 'Not Connected'
   statusEmail.textContent = 'No credentials found'
-  authSourceBadge.style.display = 'none'
   logoutBtn.style.display = 'none'
   authCodeSection.style.display = 'none'
-
-  // Show appropriate connection help based on auth mode
-  const mode = authModeSelect.value
   notConnectedHelp.style.display = 'block'
-  if (mode === 'cli') {
-    // In CLI mode, hide login button, show CLI instructions
-    loginBtn.style.display = 'none'
-    const hint = notConnectedHelp.querySelector('.hint') as HTMLElement | null
-    if (hint) hint.style.display = 'block'
-  } else {
-    // In app mode, show login button
-    loginBtn.style.display = 'inline-block'
-    const hint = notConnectedHelp.querySelector('.hint') as HTMLElement | null
-    if (hint) hint.style.display = 'none'
-  }
+  loginBtn.style.display = 'inline-block'
 }
 
 function showWaitingForCodeUI(): void {
@@ -98,8 +52,7 @@ async function loadConnectionStatus(): Promise<void> {
     if (hasCredentials) {
       const userInfo = await window.claudeBar.getUserInfo()
       const email = userInfo?.email || userInfo?.name || 'Authenticated'
-      const authSource = (userInfo as { authSource?: string } | null)?.authSource || authModeSelect.value
-      showConnectedUI(email, authSource)
+      showConnectedUI(email)
     } else {
       showNotConnectedUI()
     }
@@ -114,79 +67,10 @@ async function loadConnectionStatus(): Promise<void> {
 async function loadSettings(): Promise<void> {
   try {
     const settings = await window.claudeBar.getSettings()
-
-    // Set refresh interval
     refreshInterval.value = settings.refreshInterval.toString()
-
-    // Set notifications
-    notificationsEnabled.checked = settings.notificationsEnabled
-
-    // Set adaptive refresh
-    adaptiveRefresh.checked = settings.adaptiveRefresh
-
-    // Set launch at login
     launchAtLogin.checked = settings.launchAtLogin
-
-    // Set thresholds
-    warningThreshold.value = settings.warningThreshold.toString()
-    warningValue.textContent = `${settings.warningThreshold}%`
-    criticalThreshold.value = settings.criticalThreshold.toString()
-    criticalValue.textContent = `${settings.criticalThreshold}%`
-
-    // Update slider constraints
-    warningThreshold.max = (settings.criticalThreshold - 1).toString()
-    criticalThreshold.min = (settings.warningThreshold + 1).toString()
-
-    // Set show time to critical
-    showTimeToCritical.checked = settings.showTimeToCritical
-
-    // Set auth mode
-    if (settings.authMode) {
-      authModeSelect.value = settings.authMode
-    }
   } catch (error) {
     console.error('Failed to load settings:', error)
-  }
-}
-
-async function loadAppVersion(): Promise<void> {
-  try {
-    const version = await window.claudeBar.getAppVersion()
-    appVersion.textContent = version
-  } catch (error) {
-    console.error('Failed to load app version:', error)
-  }
-}
-
-async function checkForUpdates(): Promise<void> {
-  try {
-    updateText.textContent = 'Checking for updates...'
-    checkBtn.disabled = true
-    updateBtn.style.display = 'none'
-
-    const status = await window.claudeBar.checkForUpdates()
-
-    if (status.downloaded && status.version) {
-      updateText.textContent = `Update ${status.version} ready to install`
-      updateBtn.style.display = 'inline-block'
-      updateProgress.style.display = 'none'
-      checkBtn.style.display = 'none'
-    } else if (status.available && status.version) {
-      updateText.textContent = `Downloading update ${status.version}...`
-      downloadingVersion = status.version
-      updateProgress.style.display = 'block'
-      updateProgress.classList.add('indeterminate')
-      checkBtn.style.display = 'none'
-    } else {
-      updateText.textContent = 'You are running the latest version'
-      checkBtn.style.display = 'inline-block'
-    }
-  } catch (error) {
-    console.error('Failed to check for updates:', error)
-    updateText.textContent = 'Could not check for updates'
-    checkBtn.style.display = 'inline-block'
-  } finally {
-    checkBtn.disabled = false
   }
 }
 
@@ -200,98 +84,11 @@ refreshInterval.addEventListener('change', async () => {
   }
 })
 
-adaptiveRefresh.addEventListener('change', async () => {
-  try {
-    await window.claudeBar.setAdaptiveRefresh(adaptiveRefresh.checked)
-  } catch (error) {
-    console.error('Failed to update adaptive refresh:', error)
-  }
-})
-
-notificationsEnabled.addEventListener('change', async () => {
-  try {
-    await window.claudeBar.setNotificationsEnabled(notificationsEnabled.checked)
-  } catch (error) {
-    console.error('Failed to update notifications setting:', error)
-  }
-})
-
 launchAtLogin.addEventListener('change', async () => {
   try {
     await window.claudeBar.setLaunchAtLogin(launchAtLogin.checked)
   } catch (error) {
     console.error('Failed to update launch at login:', error)
-  }
-})
-
-updateBtn.addEventListener('click', async () => {
-  try {
-    await window.claudeBar.installUpdate()
-  } catch (error) {
-    console.error('Failed to install update:', error)
-  }
-})
-
-checkBtn.addEventListener('click', () => {
-  checkForUpdates()
-})
-
-warningThreshold.addEventListener('input', () => {
-  const value = parseInt(warningThreshold.value, 10)
-  warningValue.textContent = `${value}%`
-  // Update critical threshold minimum
-  criticalThreshold.min = (value + 1).toString()
-  if (parseInt(criticalThreshold.value, 10) <= value) {
-    criticalThreshold.value = (value + 1).toString()
-    criticalValue.textContent = `${value + 1}%`
-  }
-})
-
-warningThreshold.addEventListener('change', async () => {
-  const value = parseInt(warningThreshold.value, 10)
-  try {
-    await window.claudeBar.setWarningThreshold(value)
-  } catch (error) {
-    console.error('Failed to update warning threshold:', error)
-  }
-})
-
-criticalThreshold.addEventListener('input', () => {
-  const value = parseInt(criticalThreshold.value, 10)
-  criticalValue.textContent = `${value}%`
-  // Update warning threshold maximum
-  warningThreshold.max = (value - 1).toString()
-  if (parseInt(warningThreshold.value, 10) >= value) {
-    warningThreshold.value = (value - 1).toString()
-    warningValue.textContent = `${value - 1}%`
-  }
-})
-
-criticalThreshold.addEventListener('change', async () => {
-  const value = parseInt(criticalThreshold.value, 10)
-  try {
-    await window.claudeBar.setCriticalThreshold(value)
-  } catch (error) {
-    console.error('Failed to update critical threshold:', error)
-  }
-})
-
-showTimeToCritical.addEventListener('change', async () => {
-  try {
-    await window.claudeBar.setShowTimeToCritical(showTimeToCritical.checked)
-  } catch (error) {
-    console.error('Failed to update show time to critical:', error)
-  }
-})
-
-// Auth mode change listener
-authModeSelect.addEventListener('change', async () => {
-  try {
-    await window.claudeBar.setAuthMode(authModeSelect.value)
-    // Reload connection status to reflect the new mode
-    await loadConnectionStatus()
-  } catch (error) {
-    console.error('Failed to update auth mode:', error)
   }
 })
 
@@ -361,27 +158,6 @@ window.claudeBar.onAuthStateChanged(async (state) => {
   }
 })
 
-// Listen for download progress
-window.claudeBar.onDownloadProgress((percent) => {
-  const rounded = Math.round(percent)
-  if (rounded >= 100) {
-    updateProgress.classList.remove('indeterminate')
-    updateProgress.style.display = 'none'
-    updateText.textContent = `Update ${downloadingVersion || ''} ready to install`.trim()
-    updateBtn.style.display = 'inline-block'
-    checkBtn.style.display = 'none'
-  } else if (rounded > 0) {
-    updateProgress.classList.remove('indeterminate')
-    updateProgress.style.display = 'block'
-    updateProgressBar.style.width = `${rounded}%`
-    const versionLabel = downloadingVersion ? ` ${downloadingVersion}` : ''
-    updateText.textContent = `Downloading update${versionLabel}... ${rounded}%`
-    checkBtn.style.display = 'none'
-  }
-})
-
 // Initial load
 loadConnectionStatus()
 loadSettings()
-loadAppVersion()
-checkForUpdates()

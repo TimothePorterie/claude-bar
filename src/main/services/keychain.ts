@@ -1,7 +1,6 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { logger } from './logger'
-import { notificationService } from './notifications'
 
 const execFileAsync = promisify(execFile)
 
@@ -67,7 +66,7 @@ export class KeychainService {
   private static readonly SERVICE_NAME = 'Claude Code-credentials'
   private static readonly TOKEN_REFRESH_URL = 'https://api.anthropic.com/api/oauth/token'
   private static readonly CLIENT_ID = 'claude-code'
-  private isRefreshing = false
+  private refreshPromise: Promise<Credentials | null> | null = null
   private cachedCredentials: Credentials | null = null
 
   async getCredentials(): Promise<Credentials | null> {
@@ -184,13 +183,21 @@ export class KeychainService {
       return null
     }
 
-    if (this.isRefreshing) {
-      logger.debug('Token refresh already in progress')
-      return this.cachedCredentials
+    // If a refresh is already in progress, all callers await the same promise
+    if (this.refreshPromise) {
+      logger.debug('Token refresh already in progress, awaiting existing promise')
+      return this.refreshPromise
     }
 
-    this.isRefreshing = true
+    this.refreshPromise = this.doRefreshToken(credentials)
+    try {
+      return await this.refreshPromise
+    } finally {
+      this.refreshPromise = null
+    }
+  }
 
+  private async doRefreshToken(credentials: Credentials): Promise<Credentials | null> {
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
@@ -202,7 +209,7 @@ export class KeychainService {
         },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
-          refresh_token: credentials.refreshToken,
+          refresh_token: credentials.refreshToken!,
           client_id: KeychainService.CLIENT_ID
         }),
         signal: controller.signal
@@ -213,7 +220,6 @@ export class KeychainService {
       if (!response.ok) {
         const errorText = await response.text()
         logger.error(`Token refresh failed: ${response.status}`)
-        notificationService.notifyTokenRefreshFailed()
         return null
       }
 
@@ -264,8 +270,6 @@ export class KeychainService {
       }
       // Don't notify on network errors — they are transient and will retry on next scheduler tick
       return null
-    } finally {
-      this.isRefreshing = false
     }
   }
 

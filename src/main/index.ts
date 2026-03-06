@@ -4,7 +4,6 @@ import { windowManager } from './windows'
 import { schedulerService } from './services/scheduler'
 import { authService } from './services/auth'
 import { setupIpcHandlers, loadSettings } from './ipc-handlers'
-import { updaterService } from './services/updater'
 import { logger } from './services/logger'
 
 // Prevent multiple instances
@@ -13,13 +12,10 @@ const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
   app.quit()
 } else {
-  // Handle second instance
   app.on('second-instance', () => {
-    // Show the popup when user tries to launch second instance
     windowManager.showPopup()
   })
 
-  // Hide dock icon (we only want menu bar presence)
   if (app.dock) {
     app.dock.hide()
   }
@@ -42,39 +38,26 @@ if (!gotTheLock) {
       onShowSettings: () => windowManager.showSettings()
     })
 
-    // Start the scheduler for automatic refresh (delay to allow network initialization on cold boot)
+    // Start the scheduler (delay to allow network initialization)
     setTimeout(() => {
       schedulerService.start()
       logger.info('Scheduler started after startup delay')
-    }, 5000)
+    }, 2000)
 
-    // Initialize auto-updater
-    updaterService.initialize()
-
-    // Handle sleep/wake to avoid auth errors when Mac wakes up
-    powerMonitor.on('suspend', () => {
-      logger.info('System suspending — stopping scheduler')
-      schedulerService.stop()
-    })
-
+    // Refresh after wake from sleep (network needs a moment to reconnect)
     powerMonitor.on('resume', () => {
-      logger.info('System resumed — restarting scheduler in 5s')
-      setTimeout(() => {
-        schedulerService.start()
-        logger.info('Scheduler restarted after wake')
-      }, 5000)
+      logger.info('System resumed from sleep, scheduling refresh')
+      setTimeout(() => schedulerService.refresh(), 2000)
     })
 
     logger.info('Claude Bar started successfully')
   })
 
-  // macOS: Keep app running when all windows are closed
   app.on('window-all-closed', (e: Event) => {
     e.preventDefault()
   })
 
   app.on('activate', () => {
-    // On macOS, show popup when clicking dock icon (if visible)
     if (BrowserWindow.getAllWindows().length === 0) {
       windowManager.showPopup()
     }
