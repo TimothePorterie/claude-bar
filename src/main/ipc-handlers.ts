@@ -8,10 +8,10 @@ import { windowManager } from './windows'
 import { settingsStore as store } from './services/settings-store'
 
 // Input validation helpers
-const VALID_REFRESH_INTERVALS = [120, 300, 600] as const
+const VALID_REFRESH_INTERVALS = [300, 600, 900] as const
 
 function isValidRefreshInterval(value: unknown): value is number {
-  return typeof value === 'number' && VALID_REFRESH_INTERVALS.includes(value as 120 | 300 | 600)
+  return typeof value === 'number' && VALID_REFRESH_INTERVALS.includes(value as 300 | 600 | 900)
 }
 
 function isValidBoolean(value: unknown): value is boolean {
@@ -215,6 +215,10 @@ export function loadSettings(): void {
     const refreshInterval = store.get('refreshInterval')
     if (isValidRefreshInterval(refreshInterval)) {
       schedulerService.setRefreshInterval(refreshInterval)
+    } else if (refreshInterval != null) {
+      // Migrate obsolete value (e.g. 120s) to default
+      store.set('refreshInterval', 300)
+      logger.info(`Migrated invalid refresh interval ${refreshInterval}s → 300s`)
     }
 
     const launchAtLogin = store.get('launchAtLogin')

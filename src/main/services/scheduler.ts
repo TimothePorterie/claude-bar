@@ -8,7 +8,6 @@ export class SchedulerService {
   private rateLimitRetryId: NodeJS.Timeout | null = null
   private refreshIntervalMs: number = 300000
   private callbacks: Set<RefreshCallback> = new Set()
-  private consecutive429s: number = 0
 
   setRefreshInterval(seconds: number): void {
     this.refreshIntervalMs = seconds * 1000
@@ -59,28 +58,26 @@ export class SchedulerService {
     try {
       const quota = await quotaService.fetchQuota()
 
-      // Check if we got rate limited
+      // Check if we got rate limited (429) or proactively throttled (0 remaining)
       const cooldownMs = quotaService.getRateLimitRemainingMs()
       if (cooldownMs > 0) {
-        this.consecutive429s++
         // Stop the regular interval to avoid noise during cooldown
         this.stopInterval()
 
-        // Exponential backoff: add extra margin on repeated 429s
-        // 1st: retry-after + 5s, 2nd: retry-after + 15s, 3rd: retry-after + 45s, etc.
-        const backoffMarginMs = Math.min(5000 * Math.pow(3, this.consecutive429s - 1), 300000)
-        const retryInMs = cooldownMs + backoffMarginMs
+        // Trust the server's retry-after value + small 2s buffer
+        const retryInMs = cooldownMs + 2000
 
         if (!this.rateLimitRetryId) {
-          logger.info(`Rate limited (${this.consecutive429s}x) — retry in ${Math.ceil(retryInMs / 1000)}s (cooldown ${Math.ceil(cooldownMs / 1000)}s + backoff ${Math.ceil(backoffMarginMs / 1000)}s)`)
+          const lastError = quotaService.getLastError()
+          const reason = lastError?.type === 'rate_limit' ? 'Rate limited (retry-after)' : 'Proactive throttle'
+          logger.info(`${reason} — retry in ${Math.ceil(retryInMs / 1000)}s`)
           this.rateLimitRetryId = setTimeout(() => {
             this.rateLimitRetryId = null
             this.refresh()
           }, retryInMs)
         }
       } else {
-        // Success — reset backoff and restart interval if needed
-        this.consecutive429s = 0
+        // Success — restart interval if needed
         this.restartInterval()
       }
 

@@ -1,7 +1,6 @@
 import { keychainService, Credentials } from './keychain'
 import { logger } from './logger'
 import { settingsStore, PersistedQuotaData } from './settings-store'
-import { probeCliUsage } from './cli-probe'
 
 export interface QuotaData {
   utilization: number
@@ -40,8 +39,9 @@ export interface QuotaInfo {
 
 const WARNING_THRESHOLD = 70
 const CRITICAL_THRESHOLD = 90
-const MIN_FETCH_INTERVAL_MS = 120000 // 2min minimum between API calls, always enforced
-const MIN_429_COOLDOWN_SEC = 300 // 5min minimum cooldown on rate limit (server returns retry-after: 0 which is misleading)
+const MIN_FETCH_INTERVAL_MS = 300000 // 5min minimum between scheduled API calls
+const MIN_FORCE_INTERVAL_MS = 15000 // 15s absolute minimum even for manual refresh
+const MIN_429_COOLDOWN_SEC = 60 // OAuth /usage returns retry-after: 0 which is misleading — use 1min floor
 
 export class QuotaService {
   private static readonly API_URL = 'https://api.anthropic.com/api/oauth/usage'
@@ -51,6 +51,7 @@ export class QuotaService {
   private lastFetchTime: number = 0
   private lastError: QuotaError | null = null
   private rateLimitedUntil: number
+  private rateLimitRemaining: number | null = null
   private pendingFetch: Promise<QuotaInfo | null> | null = null
 
   constructor() {
@@ -95,7 +96,12 @@ export class QuotaService {
       return this.pendingFetch
     }
 
-    // Enforce minimum interval between fetches — bypass when force=true (manual refresh)
+    // Absolute minimum between API calls — prevents spam even on manual refresh
+    if (this.cachedQuota && Date.now() - this.lastFetchTime < MIN_FORCE_INTERVAL_MS) {
+      return this.getCachedQuota()!
+    }
+
+    // Enforce longer minimum for scheduled (non-forced) fetches
     if (!force && this.cachedQuota && Date.now() - this.lastFetchTime < MIN_FETCH_INTERVAL_MS) {
       return this.getCachedQuota()!
     }
@@ -109,13 +115,6 @@ export class QuotaService {
   }
 
   private async doFetch(): Promise<QuotaInfo | null> {
-    // Strategy 1: Try CLI probe first (no rate limit, no API call)
-    const cliResult = await probeCliUsage()
-    if (cliResult && (cliResult.sessionPercent !== null || cliResult.weeklyPercent !== null)) {
-      return this.applyCliResult(cliResult)
-    }
-
-    // Strategy 2: Fall back to API (respecting rate limit cooldown)
     if (Date.now() < this.rateLimitedUntil) {
       if (this.cachedQuota) {
         return this.getCachedQuota()!
@@ -123,46 +122,6 @@ export class QuotaService {
       return null
     }
     return this.doApiFetch()
-  }
-
-  private applyCliResult(cliResult: { sessionPercent: number | null; weeklyPercent: number | null }): QuotaInfo {
-    const now = new Date()
-
-    // Use CLI percentages, keep existing resetsAt from cache if available
-    const fiveHourResetsAt = this.cachedQuota?.fiveHour.resetsAt ?? new Date(now.getTime() + 5 * 60 * 60 * 1000)
-    const sevenDayResetsAt = this.cachedQuota?.sevenDay.resetsAt ?? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-
-    const fiveHourUtil = cliResult.sessionPercent ?? this.cachedQuota?.fiveHour.utilization ?? 0
-    const sevenDayUtil = cliResult.weeklyPercent ?? this.cachedQuota?.sevenDay.utilization ?? 0
-
-    this.cachedQuota = {
-      fiveHour: {
-        utilization: fiveHourUtil,
-        resetsAt: fiveHourResetsAt,
-        resetsIn: this.formatTimeUntil(fiveHourResetsAt),
-        resetProgress: this.calculateResetProgress(fiveHourResetsAt, 5)
-      },
-      sevenDay: {
-        utilization: sevenDayUtil,
-        resetsAt: sevenDayResetsAt,
-        resetsIn: this.formatTimeUntil(sevenDayResetsAt),
-        resetProgress: this.calculateResetProgress(sevenDayResetsAt, 7 * 24)
-      },
-      lastUpdated: now
-    }
-
-    this.lastFetchTime = Date.now()
-    this.lastError = null
-
-    // Persist (use ISO string for resetsAt)
-    settingsStore.set('lastQuotaData', {
-      fiveHour: { utilization: fiveHourUtil, resetsAt: fiveHourResetsAt.toISOString() },
-      sevenDay: { utilization: sevenDayUtil, resetsAt: sevenDayResetsAt.toISOString() },
-      fetchedAt: this.lastFetchTime
-    })
-
-    logger.info(`Quota fetched (CLI): 5h=${Math.round(fiveHourUtil)}%, 7d=${Math.round(sevenDayUtil)}%`)
-    return this.cachedQuota
   }
 
   private async doApiFetch(): Promise<QuotaInfo | null> {
@@ -207,8 +166,11 @@ export class QuotaService {
 
       this.lastFetchTime = Date.now()
       this.lastError = null
-      this.rateLimitedUntil = 0
-      settingsStore.set('rateLimitedUntil', 0)
+      // Only clear rate limit cooldown if we still have budget remaining
+      if (this.rateLimitRemaining === null || this.rateLimitRemaining > 0) {
+        this.rateLimitedUntil = 0
+        settingsStore.set('rateLimitedUntil', 0)
+      }
 
       // Persist quota data for next startup
       settingsStore.set('lastQuotaData', {
@@ -260,11 +222,7 @@ export class QuotaService {
       let response = await doRequest(credentials)
 
       if (response.ok) {
-        const remaining = response.headers.get('anthropic-ratelimit-requests-remaining')
-        const reset = response.headers.get('anthropic-ratelimit-requests-reset')
-        if (remaining || reset) {
-          logger.info(`Rate limit budget: remaining=${remaining}, reset=${reset}`)
-        }
+        this.applyRateLimitHeaders(response)
         return response
       }
 
@@ -275,6 +233,7 @@ export class QuotaService {
         if (refreshed) {
           response = await doRequest(refreshed)
           if (response.ok) {
+            this.applyRateLimitHeaders(response)
             return response
           }
         }
@@ -289,10 +248,9 @@ export class QuotaService {
         const cooldownSec = Math.max(serverSec, MIN_429_COOLDOWN_SEC)
         this.rateLimitedUntil = Date.now() + cooldownSec * 1000
         settingsStore.set('rateLimitedUntil', this.rateLimitedUntil)
-        // Log all rate-limit headers for diagnosis
-        const rlHeaders = ['anthropic-ratelimit-requests-limit', 'anthropic-ratelimit-requests-remaining', 'anthropic-ratelimit-requests-reset', 'retry-after']
-        const rlInfo = rlHeaders.map(h => `${h}=${response.headers.get(h)}`).join(', ')
-        logger.warn(`Rate limited (429), cooldown ${cooldownSec}s | ${rlInfo}`)
+        // Also read remaining/reset headers — may extend cooldown if reset > retry-after
+        this.applyRateLimitHeaders(response)
+        logger.warn(`Rate limited (429), cooldown ${cooldownSec}s (retry-after=${serverSec}s)`)
         this.lastError = { type: 'rate_limit', message: this.formatRateLimitMessage(), retryable: true }
         return null
       }
@@ -307,6 +265,39 @@ export class QuotaService {
       this.lastError = this.classifyError(error)
       return null
     }
+  }
+
+  /**
+   * Parse rate limit headers and proactively throttle when budget is exhausted.
+   * Note: the OAuth /usage endpoint may not return these headers.
+   */
+  private applyRateLimitHeaders(response: Response): void {
+    const remainingStr = response.headers.get('anthropic-ratelimit-requests-remaining')
+    const resetStr = response.headers.get('anthropic-ratelimit-requests-reset')
+
+    if (remainingStr != null) {
+      this.rateLimitRemaining = parseInt(remainingStr, 10)
+      logger.info(`Rate limit budget: remaining=${remainingStr}, reset=${resetStr ?? '?'}`)
+    }
+
+    // Proactive throttle: if no requests remain, pause until the reset time
+    if (this.rateLimitRemaining != null && this.rateLimitRemaining <= 0 && resetStr) {
+      const resetTime = new Date(resetStr).getTime()
+      if (!isNaN(resetTime) && resetTime > Date.now()) {
+        // Add a small buffer (5s) to avoid racing with the server clock
+        const proactiveCooldownUntil = resetTime + 5000
+        if (proactiveCooldownUntil > this.rateLimitedUntil) {
+          this.rateLimitedUntil = proactiveCooldownUntil
+          settingsStore.set('rateLimitedUntil', this.rateLimitedUntil)
+          const cooldownSec = Math.ceil((proactiveCooldownUntil - Date.now()) / 1000)
+          logger.warn(`Proactive throttle: 0 requests remaining, pausing API calls for ${cooldownSec}s until reset`)
+        }
+      }
+    }
+  }
+
+  getRateLimitRemaining(): number | null {
+    return this.rateLimitRemaining
   }
 
   private classifyError(error: unknown): QuotaError {

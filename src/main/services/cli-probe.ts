@@ -124,7 +124,7 @@ export async function probeCliUsage(): Promise<CliQuotaResult | null> {
     cachedBinaryPath = null
   }
 
-  const binaryPath = findClaudeBinary()
+  const binaryPath = await findClaudeBinary()
   if (!binaryPath) {
     logger.debug('Claude CLI not found, skipping CLI probe')
     cliUnavailable = true
@@ -149,14 +149,15 @@ export async function probeCliUsage(): Promise<CliQuotaResult | null> {
       },
       (error, stdout, stderr) => {
         if (error) {
-          // "Unknown skill" means /usage isn't available in this version — cache it
-          if (stdout?.includes('Unknown skill') || stderr?.includes('Unknown skill')) {
+          // Cache all CLI failures to avoid retrying every cycle
+          const isUnknownSkill = stdout?.includes('Unknown skill') || stderr?.includes('Unknown skill')
+          if (isUnknownSkill) {
             logger.debug('Claude CLI /usage not available in this version, disabling for 30min')
-            cliUnavailable = true
-            cliUnavailableUntil = Date.now() + CLI_UNAVAILABLE_CACHE_MS
           } else {
-            logger.debug(`CLI probe failed: ${error.message}`)
+            logger.debug(`CLI probe failed: ${error.message}, disabling for 5min`)
           }
+          cliUnavailable = true
+          cliUnavailableUntil = Date.now() + (isUnknownSkill ? CLI_UNAVAILABLE_CACHE_MS : 5 * 60 * 1000)
           resolve(null)
           return
         }
