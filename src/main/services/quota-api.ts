@@ -41,7 +41,7 @@ const WARNING_THRESHOLD = 70
 const CRITICAL_THRESHOLD = 90
 const MIN_FETCH_INTERVAL_MS = 300000 // 5min minimum between scheduled API calls
 const MIN_FORCE_INTERVAL_MS = 15000 // 15s absolute minimum even for manual refresh
-const MIN_429_COOLDOWN_SEC = 60 // OAuth /usage returns retry-after: 0 which is misleading — use 1min floor
+const MIN_429_COOLDOWN_SEC = 120 // OAuth /usage returns retry-after: 0 which is misleading — use 2min floor
 
 export class QuotaService {
   private static readonly API_URL = 'https://api.anthropic.com/api/oauth/usage'
@@ -53,6 +53,7 @@ export class QuotaService {
   private rateLimitedUntil: number
   private rateLimitRemaining: number | null = null
   private pendingFetch: Promise<QuotaInfo | null> | null = null
+  private tokenRotatedForRateLimit: boolean = false
 
   constructor() {
     // Restore persisted rate limit, but clear if already expired
@@ -166,6 +167,7 @@ export class QuotaService {
 
       this.lastFetchTime = Date.now()
       this.lastError = null
+      this.tokenRotatedForRateLimit = false
       // Only clear rate limit cooldown if we still have budget remaining
       if (this.rateLimitRemaining === null || this.rateLimitRemaining > 0) {
         this.rateLimitedUntil = 0
@@ -241,14 +243,29 @@ export class QuotaService {
         return null
       }
 
-      // Handle rate limiting
+      // Handle rate limiting — try token rotation first (fresh token = fresh budget)
       if (response.status === 429) {
+        if (!this.tokenRotatedForRateLimit) {
+          logger.info('Rate limited (429) — attempting token rotation for fresh budget')
+          const refreshed = await keychainService.refreshToken(credentials)
+          if (refreshed) {
+            this.tokenRotatedForRateLimit = true
+            const retryResponse = await doRequest(refreshed)
+            if (retryResponse.ok) {
+              logger.info('Token rotation successful — fresh budget obtained')
+              this.applyRateLimitHeaders(retryResponse)
+              return retryResponse
+            }
+            // Retry also 429'd — fall through to cooldown
+            logger.warn('Token rotation did not resolve rate limit')
+          }
+        }
+
         const retryAfter = response.headers.get('retry-after')
         const serverSec = retryAfter ? parseInt(retryAfter, 10) || 0 : 0
         const cooldownSec = Math.max(serverSec, MIN_429_COOLDOWN_SEC)
         this.rateLimitedUntil = Date.now() + cooldownSec * 1000
         settingsStore.set('rateLimitedUntil', this.rateLimitedUntil)
-        // Also read remaining/reset headers — may extend cooldown if reset > retry-after
         this.applyRateLimitHeaders(response)
         logger.warn(`Rate limited (429), cooldown ${cooldownSec}s (retry-after=${serverSec}s)`)
         this.lastError = { type: 'rate_limit', message: this.formatRateLimitMessage(), retryable: true }
