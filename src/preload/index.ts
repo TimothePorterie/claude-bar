@@ -80,6 +80,19 @@ const api = {
     return () => ipcRenderer.removeListener('auth-state-changed', handler)
   },
 
+  // Updates
+  checkForUpdates: (): Promise<boolean> => ipcRenderer.invoke('check-for-updates'),
+  downloadUpdate: (): Promise<boolean> => ipcRenderer.invoke('download-update'),
+  installUpdate: (): Promise<boolean> => ipcRenderer.invoke('install-update'),
+  getUpdateStatus: (): Promise<{ status: string; version?: string; progress?: number; error?: string }> =>
+    ipcRenderer.invoke('get-update-status'),
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('get-app-version'),
+  onUpdateStatusChanged: (callback: (state: { status: string; version?: string; progress?: number; error?: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: { status: string; version?: string; progress?: number; error?: string }): void => callback(state)
+    ipcRenderer.on('update-status-changed', handler)
+    return () => ipcRenderer.removeListener('update-status-changed', handler)
+  },
+
   // Navigation
   openSettings: (): Promise<boolean> => ipcRenderer.invoke('open-settings'),
 

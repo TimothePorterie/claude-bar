@@ -158,6 +158,101 @@ window.claudeBar.onAuthStateChanged(async (state) => {
   }
 })
 
+// Update UI elements
+const updateText = document.getElementById('updateText') as HTMLElement
+const checkUpdateBtn = document.getElementById('checkUpdateBtn') as HTMLButtonElement
+const installUpdateBtn = document.getElementById('installUpdateBtn') as HTMLButtonElement
+const updateProgress = document.getElementById('updateProgress') as HTMLElement
+const updateProgressBar = document.getElementById('updateProgressBar') as HTMLElement
+const appVersion = document.getElementById('appVersion') as HTMLElement
+
+function updateUpdateUI(state: { status: string; version?: string; progress?: number; error?: string }): void {
+  checkUpdateBtn.disabled = false
+  installUpdateBtn.style.display = 'none'
+  updateProgress.style.display = 'none'
+  updateProgress.classList.remove('indeterminate')
+
+  switch (state.status) {
+    case 'checking':
+      updateText.textContent = 'Checking for updates...'
+      checkUpdateBtn.disabled = true
+      updateProgress.style.display = 'block'
+      updateProgress.classList.add('indeterminate')
+      break
+    case 'available':
+      updateText.textContent = `Version ${state.version} available`
+      checkUpdateBtn.style.display = 'none'
+      installUpdateBtn.style.display = 'inline-block'
+      installUpdateBtn.textContent = 'Download & Install'
+      break
+    case 'not-available':
+      updateText.textContent = 'You are up to date'
+      break
+    case 'downloading':
+      updateText.textContent = `Downloading... ${state.progress ?? 0}%`
+      checkUpdateBtn.style.display = 'none'
+      updateProgress.style.display = 'block'
+      updateProgressBar.style.width = `${state.progress ?? 0}%`
+      break
+    case 'downloaded':
+      updateText.textContent = `Version ${state.version} ready to install`
+      checkUpdateBtn.style.display = 'none'
+      installUpdateBtn.style.display = 'inline-block'
+      installUpdateBtn.textContent = 'Install & Restart'
+      break
+    case 'error':
+      updateText.textContent = state.error || 'Update check failed'
+      break
+    default:
+      updateText.textContent = 'Click to check for updates'
+  }
+}
+
+checkUpdateBtn.addEventListener('click', async () => {
+  checkUpdateBtn.disabled = true
+  try {
+    await window.claudeBar.checkForUpdates()
+  } catch (error) {
+    console.error('Failed to check for updates:', error)
+    checkUpdateBtn.disabled = false
+  }
+})
+
+installUpdateBtn.addEventListener('click', async () => {
+  installUpdateBtn.disabled = true
+  try {
+    const state = await window.claudeBar.getUpdateStatus()
+    if (state.status === 'available') {
+      // Need to download first
+      await window.claudeBar.downloadUpdate()
+    } else if (state.status === 'downloaded') {
+      await window.claudeBar.installUpdate()
+    }
+  } catch (error) {
+    console.error('Failed to install update:', error)
+    installUpdateBtn.disabled = false
+  }
+})
+
+// Listen for update status changes
+window.claudeBar.onUpdateStatusChanged((state) => {
+  updateUpdateUI(state)
+})
+
+// Load version and initial update state
+async function loadUpdateInfo(): Promise<void> {
+  try {
+    const version = await window.claudeBar.getAppVersion()
+    appVersion.textContent = `Claude Bar v${version}`
+
+    const state = await window.claudeBar.getUpdateStatus()
+    updateUpdateUI(state)
+  } catch (error) {
+    console.error('Failed to load update info:', error)
+  }
+}
+
 // Initial load
 loadConnectionStatus()
 loadSettings()
+loadUpdateInfo()

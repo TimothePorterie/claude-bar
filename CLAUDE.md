@@ -25,6 +25,7 @@ Main Process (Electron)
     ├── quota-api.ts      # Anthropic API integration with retry logic + auth routing
     ├── settings-store.ts # Shared settings store (electron-store singleton)
     ├── scheduler.ts      # Auto-refresh timer
+    ├── updater.ts        # Auto-update via electron-updater + GitHub Releases
     ├── logger.ts         # Persistent logging with electron-log
     └── cli-probe.ts      # Alternative CLI-based quota probe (unused)
 
@@ -58,6 +59,7 @@ Tests
 | `src/main/services/quota-api.ts` | API calls with retry logic, auth source routing based on `authMode` |
 | `src/main/services/settings-store.ts` | Shared electron-store singleton, avoids circular deps |
 | `src/main/services/scheduler.ts` | Periodic refresh timer with rate limit cooldown |
+| `src/main/services/updater.ts` | Auto-update via electron-updater, download progress, install & restart |
 | `src/main/services/logger.ts` | Persistent file logging |
 | `src/preload/index.ts` | Exposes `window.claudeBar` API to renderer |
 
@@ -101,6 +103,13 @@ Tests
 - Error indicators in menu bar title and icon on failures
 - Error types: network, auth, rate_limit, server, unknown
 
+### Auto-Updates
+- Automatic update check on startup (5s delay)
+- Manual check via Settings or tray context menu
+- Background download with progress bar
+- One-click install & restart from Settings
+- Updates sourced from GitHub Releases (signed DMG + ZIP)
+
 ### Tooltips
 Hover over menu bar icon to see:
 - Session/Weekly usage percentages
@@ -113,7 +122,6 @@ The following features are planned but not yet present in the codebase:
 
 - **Notifications service** (`notifications.ts`) — system notifications on threshold crossings
 - **History service** (`history.ts`) — usage history tracking, charts, statistics
-- **Auto-updater service** (`updater.ts`) — auto-update via electron-updater
 - **Trend indicators** — usage direction arrows (↑↓→) in display
 - **Adaptive refresh** — automatic interval adjustment based on quota level
 - **Pause mode** — temporarily stop monitoring
@@ -198,6 +206,12 @@ Credentials stored under `Claude Code-credentials`:
 | `auth-logout` | renderer -> main | Clear in-app tokens |
 | `auth-get-state` | renderer -> main | Get current auth state |
 | `auth-state-changed` | main -> renderer | Broadcast auth state changes |
+| `check-for-updates` | renderer -> main | Trigger update check |
+| `download-update` | renderer -> main | Start downloading available update |
+| `install-update` | renderer -> main | Install downloaded update & restart |
+| `get-update-status` | renderer -> main | Get current update state |
+| `get-app-version` | renderer -> main | Get app version string |
+| `update-status-changed` | main -> renderer | Broadcast update status changes |
 | `open-settings` | renderer -> main | Open settings window from popup |
 | `popup-content-height` | renderer -> main | Report popup height for auto-fit |
 | `quota-updated` | main -> renderer | Broadcast quota updates |
@@ -257,7 +271,7 @@ npm run test:coverage # Run tests with coverage report
 **Runtime:**
 - `electron-store` - Persistent settings storage
 - `electron-log` - File-based logging
-- `electron-updater` - Auto-update functionality (not yet wired)
+- `electron-updater` - Auto-update functionality
 
 **Dev:**
 - `electron` ^40.4.1 - Desktop framework

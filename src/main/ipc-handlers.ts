@@ -3,6 +3,7 @@ import { keychainService } from './services/keychain'
 import { authService } from './services/auth'
 import { quotaService, QuotaInfo } from './services/quota-api'
 import { schedulerService } from './services/scheduler'
+import { updaterService } from './services/updater'
 import { logger } from './services/logger'
 import { windowManager } from './windows'
 import { settingsStore as store } from './services/settings-store'
@@ -211,6 +212,50 @@ export function setupIpcHandlers(): void {
       logger.error('IPC auth-get-state error:', error)
       return 'unauthenticated'
     }
+  })
+
+  // Update handlers
+  ipcMain.handle('check-for-updates', async () => {
+    try {
+      await updaterService.checkForUpdates()
+      return true
+    } catch (error) {
+      logger.error('IPC check-for-updates error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('download-update', async () => {
+    try {
+      await updaterService.downloadUpdate()
+      return true
+    } catch (error) {
+      logger.error('IPC download-update error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('install-update', () => {
+    try {
+      updaterService.installUpdate()
+      return true
+    } catch (error) {
+      logger.error('IPC install-update error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('get-update-status', () => {
+    try {
+      return updaterService.getState()
+    } catch (error) {
+      logger.error('IPC get-update-status error:', error)
+      return { status: 'idle' }
+    }
+  })
+
+  ipcMain.handle('get-app-version', () => {
+    return app.getVersion()
   })
 
   // Open settings window from popup

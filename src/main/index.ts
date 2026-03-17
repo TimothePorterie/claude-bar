@@ -2,6 +2,7 @@ import { app, BrowserWindow, powerMonitor } from 'electron'
 import { trayManager } from './tray'
 import { windowManager } from './windows'
 import { schedulerService } from './services/scheduler'
+import { updaterService } from './services/updater'
 import { authService } from './services/auth'
 import { setupIpcHandlers, loadSettings } from './ipc-handlers'
 import { logger } from './services/logger'
@@ -38,11 +39,19 @@ if (!gotTheLock) {
       onShowSettings: () => windowManager.showSettings()
     })
 
+    // Initialize auto-updater
+    updaterService.initialize()
+
     // Start the scheduler (delay to allow network initialization)
     setTimeout(() => {
       schedulerService.start()
       logger.info('Scheduler started after startup delay')
     }, 2000)
+
+    // Check for updates after a short delay (don't block startup)
+    setTimeout(() => {
+      updaterService.checkForUpdates()
+    }, 5000)
 
     // Refresh after wake from sleep (network needs a moment to reconnect)
     powerMonitor.on('resume', () => {
