@@ -18,6 +18,12 @@ function isValidBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean'
 }
 
+const VALID_AUTH_MODES = ['app', 'cli'] as const
+
+function isValidAuthMode(value: unknown): value is 'app' | 'cli' {
+  return typeof value === 'string' && VALID_AUTH_MODES.includes(value as 'app' | 'cli')
+}
+
 export function setupIpcHandlers(): void {
   // Get quota data (cache only)
   ipcMain.handle('get-quota', async (): Promise<QuotaInfo | null> => {
@@ -83,13 +89,15 @@ export function setupIpcHandlers(): void {
     try {
       return {
         refreshInterval: store.get('refreshInterval'),
-        launchAtLogin: store.get('launchAtLogin')
+        launchAtLogin: store.get('launchAtLogin'),
+        authMode: store.get('authMode')
       }
     } catch (error) {
       logger.error('IPC get-settings error:', error)
       return {
         refreshInterval: 300,
-        launchAtLogin: false
+        launchAtLogin: false,
+        authMode: 'app'
       }
     }
   })
@@ -131,6 +139,22 @@ export function setupIpcHandlers(): void {
       return true
     } catch (error) {
       logger.error('IPC set-launch-at-login error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('set-auth-mode', (_event, mode: unknown) => {
+    if (!isValidAuthMode(mode)) {
+      logger.warn(`Invalid auth mode rejected: ${mode}`)
+      return false
+    }
+
+    try {
+      store.set('authMode', mode)
+      logger.info(`Auth mode set to '${mode}'`)
+      return true
+    } catch (error) {
+      logger.error('IPC set-auth-mode error:', error)
       return false
     }
   })

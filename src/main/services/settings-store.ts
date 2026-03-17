@@ -9,6 +9,7 @@ interface PersistedQuotaData {
 interface SettingsStoreSchema {
   refreshInterval: number
   launchAtLogin: boolean
+  authMode: 'app' | 'cli'
   rateLimitedUntil: number
   lastQuotaData: PersistedQuotaData | null
   displayMode: string
@@ -20,6 +21,7 @@ export const settingsStore = new Store<SettingsStoreSchema>({
   defaults: {
     refreshInterval: 300,
     launchAtLogin: false,
+    authMode: 'app' as const,
     rateLimitedUntil: 0,
     lastQuotaData: null,
     displayMode: 'standard'

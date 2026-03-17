@@ -1,4 +1,5 @@
 import { keychainService, Credentials } from './keychain'
+import { authService } from './auth'
 import { logger } from './logger'
 import { settingsStore, PersistedQuotaData } from './settings-store'
 
@@ -125,12 +126,69 @@ export class QuotaService {
     return this.doApiFetch()
   }
 
+  /**
+   * Resolve credentials based on the configured authMode.
+   * - 'app': uses in-app OAuth tokens (authService)
+   * - 'cli': uses CLI Keychain tokens (keychainService)
+   */
+  private async getCredentials(): Promise<Credentials | null> {
+    const authMode = settingsStore.get('authMode')
+
+    if (authMode === 'app') {
+      const accessToken = await authService.getValidAccessToken()
+      if (!accessToken) {
+        logger.error('No credentials available from in-app auth')
+        return null
+      }
+      // Wrap as Credentials for uniform API surface
+      const userInfo = authService.getUserInfo()
+      return {
+        accessToken,
+        emailAddress: userInfo?.email,
+        displayName: userInfo?.name,
+        subscriptionType: userInfo?.subscriptionType
+      }
+    }
+
+    // CLI keychain mode
+    const credentials = await keychainService.getValidCredentials()
+    if (!credentials || !credentials.accessToken) {
+      logger.error('No credentials available in Keychain')
+      return null
+    }
+    return credentials
+  }
+
+  /**
+   * Refresh credentials after a 401 error.
+   * Routes to the correct auth source based on authMode.
+   */
+  private async refreshCredentials(current: Credentials): Promise<Credentials | null> {
+    const authMode = settingsStore.get('authMode')
+
+    if (authMode === 'app') {
+      const refreshed = await authService.refreshTokens()
+      if (!refreshed) return null
+      const accessToken = await authService.getValidAccessToken()
+      if (!accessToken) return null
+      const userInfo = authService.getUserInfo()
+      return {
+        accessToken,
+        emailAddress: userInfo?.email,
+        displayName: userInfo?.name,
+        subscriptionType: userInfo?.subscriptionType
+      }
+    }
+
+    // CLI keychain mode
+    return await keychainService.refreshToken(current)
+  }
+
   private async doApiFetch(): Promise<QuotaInfo | null> {
     try {
-      const credentials = await keychainService.getValidCredentials()
+      const credentials = await this.getCredentials()
 
-      if (!credentials || !credentials.accessToken) {
-        logger.error('No credentials available in Keychain')
+      if (!credentials) {
         this.lastError = { type: 'auth', message: 'No credentials found. Please log in.', retryable: false }
         return null
       }
@@ -231,7 +289,7 @@ export class QuotaService {
       // On 401, try refreshing token once
       if (response.status === 401) {
         logger.warn('Authentication failed — attempting token refresh')
-        const refreshed = await keychainService.refreshToken(credentials)
+        const refreshed = await this.refreshCredentials(credentials)
         if (refreshed) {
           response = await doRequest(refreshed)
           if (response.ok) {
@@ -247,7 +305,7 @@ export class QuotaService {
       if (response.status === 429) {
         if (!this.tokenRotatedForRateLimit) {
           logger.info('Rate limited (429) — attempting token rotation for fresh budget')
-          const refreshed = await keychainService.refreshToken(credentials)
+          const refreshed = await this.refreshCredentials(credentials)
           if (refreshed) {
             this.tokenRotatedForRateLimit = true
             const retryResponse = await doRequest(refreshed)
