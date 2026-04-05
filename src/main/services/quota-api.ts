@@ -44,6 +44,19 @@ const MIN_FETCH_INTERVAL_MS = 300000 // 5min minimum between scheduled API calls
 const MIN_FORCE_INTERVAL_MS = 15000 // 15s absolute minimum even for manual refresh
 const MIN_429_COOLDOWN_SEC = 120 // OAuth /usage returns retry-after: 0 which is misleading — use 2min floor
 
+function isValidUsageResponse(data: unknown): data is UsageResponse {
+  if (!data || typeof data !== 'object') return false
+  const obj = data as Record<string, unknown>
+
+  const isValidQuota = (q: unknown): q is QuotaData => {
+    if (!q || typeof q !== 'object') return false
+    const qObj = q as Record<string, unknown>
+    return typeof qObj.utilization === 'number' && typeof qObj.resets_at === 'string'
+  }
+
+  return isValidQuota(obj.five_hour) && isValidQuota(obj.seven_day)
+}
+
 export class QuotaService {
   private static readonly API_URL = 'https://api.anthropic.com/api/oauth/usage'
   private static readonly BETA_HEADER = 'oauth-2025-04-20'
@@ -123,6 +136,8 @@ export class QuotaService {
       }
       return null
     }
+    // Cooldown expired — allow token rotation on next 429
+    this.tokenRotatedForRateLimit = false
     return this.doApiFetch()
   }
 
@@ -201,8 +216,14 @@ export class QuotaService {
         return null
       }
 
-      const rawData = (await response.json()) as Record<string, unknown>
-      const data = rawData as unknown as UsageResponse
+      const rawData = await response.json()
+      if (!isValidUsageResponse(rawData)) {
+        logger.error('Invalid API response shape:', JSON.stringify(rawData).slice(0, 200))
+        this.lastError = { type: 'server', message: 'Unexpected API response format.', retryable: true }
+        if (this.cachedQuota) return { ...this.cachedQuota, error: this.lastError }
+        return null
+      }
+      const data = rawData
 
       const newFiveHourReset = new Date(data.five_hour.resets_at)
       const newSevenDayReset = new Date(data.seven_day.resets_at)
@@ -376,26 +397,37 @@ export class QuotaService {
   }
 
   private classifyError(error: unknown): QuotaError {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-
-    if (errorMessage.includes('network') || errorMessage.includes('ENOTFOUND') || errorMessage.includes('ECONNREFUSED') || errorMessage.includes('fetch')) {
+    // Check error type/name first, then fall back to message matching
+    if (error instanceof TypeError && error.message.includes('fetch')) {
       return { type: 'network', message: 'Unable to connect. Check your internet connection.', retryable: true }
     }
 
-    if (errorMessage.includes('AbortError') || errorMessage.includes('abort')) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
       return { type: 'network', message: 'Request timed out. Will retry automatically.', retryable: true }
     }
 
-    if (errorMessage.includes('401') || errorMessage.includes('authentication') || errorMessage.includes('token')) {
-      return { type: 'auth', message: 'Session expired. Please log in again from Settings.', retryable: false }
+    // Node.js system errors (ENOTFOUND, ECONNREFUSED, ECONNRESET, etc.)
+    if (error instanceof Error && 'code' in error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ETIMEDOUT') {
+        return { type: 'network', message: 'Unable to connect. Check your internet connection.', retryable: true }
+      }
     }
 
-    if (errorMessage.includes('429') || errorMessage.includes('rate')) {
-      return { type: 'rate_limit', message: 'Rate limited. Will retry automatically.', retryable: true }
-    }
-
-    if (/\b5\d{2}\b/.test(errorMessage)) {
-      return { type: 'server', message: 'Server error. Will retry automatically.', retryable: true }
+    // HTTP status-based classification (from fetchOnce error wrapping)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const httpMatch = errorMessage.match(/^HTTP (\d{3}):/)
+    if (httpMatch) {
+      const status = parseInt(httpMatch[1], 10)
+      if (status === 401 || status === 403) {
+        return { type: 'auth', message: 'Session expired. Please log in again from Settings.', retryable: false }
+      }
+      if (status === 429) {
+        return { type: 'rate_limit', message: 'Rate limited. Will retry automatically.', retryable: true }
+      }
+      if (status >= 500) {
+        return { type: 'server', message: 'Server error. Will retry automatically.', retryable: true }
+      }
     }
 
     return { type: 'unknown', message: 'An unexpected error occurred.', retryable: true }

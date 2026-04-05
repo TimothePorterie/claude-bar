@@ -3,11 +3,15 @@ import { logger } from './logger'
 
 type RefreshCallback = () => void
 
+const MAX_BACKOFF_MULTIPLIER = 8 // Max 8x the normal interval
+
 export class SchedulerService {
   private intervalId: NodeJS.Timeout | null = null
   private rateLimitRetryId: NodeJS.Timeout | null = null
   private refreshIntervalMs: number = 300000
   private callbacks: Set<RefreshCallback> = new Set()
+  private consecutiveErrors: number = 0
+  private backoffRetryId: NodeJS.Timeout | null = null
 
   setRefreshInterval(seconds: number): void {
     this.refreshIntervalMs = seconds * 1000
@@ -52,6 +56,11 @@ export class SchedulerService {
       clearTimeout(this.rateLimitRetryId)
       this.rateLimitRetryId = null
     }
+    if (this.backoffRetryId) {
+      clearTimeout(this.backoffRetryId)
+      this.backoffRetryId = null
+    }
+    this.consecutiveErrors = 0
   }
 
   async refresh(): Promise<void> {
@@ -76,16 +85,39 @@ export class SchedulerService {
             this.refresh()
           }, retryInMs)
         }
+      } else if (quota?.error && quota.error.retryable) {
+        // Got cached data back but with an error — back off
+        this.handleRetryableError()
+      } else if (!quota && quotaService.getLastError()?.retryable) {
+        // No data at all + retryable error — back off
+        this.handleRetryableError()
       } else {
-        // Success — restart interval if needed
+        // Success — reset backoff and restart interval
+        this.consecutiveErrors = 0
         this.restartInterval()
       }
 
       this.notifyCallbacks()
     } catch (error) {
-      console.error('Scheduled refresh failed:', error)
+      logger.error('Scheduled refresh failed:', error)
+      this.handleRetryableError()
       this.notifyCallbacks()
     }
+  }
+
+  private handleRetryableError(): void {
+    this.consecutiveErrors++
+    const multiplier = Math.min(2 ** (this.consecutiveErrors - 1), MAX_BACKOFF_MULTIPLIER)
+    const backoffMs = this.refreshIntervalMs * multiplier
+
+    this.stopInterval()
+    if (this.backoffRetryId) return // Already scheduled
+
+    logger.warn(`Error backoff: attempt ${this.consecutiveErrors}, retry in ${Math.ceil(backoffMs / 1000)}s (${multiplier}x)`)
+    this.backoffRetryId = setTimeout(() => {
+      this.backoffRetryId = null
+      this.refresh()
+    }, backoffMs)
   }
 
   private stopInterval(): void {
@@ -107,7 +139,7 @@ export class SchedulerService {
       try {
         callback()
       } catch (error) {
-        console.error('Refresh callback error:', error)
+        logger.error('Refresh callback error:', error)
       }
     }
   }
