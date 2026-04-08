@@ -8,19 +8,25 @@ export interface QuotaError {
   retryable: boolean
 }
 
+export interface QuotaPeriod {
+  utilization: number
+  resetsAt: Date
+  resetsIn: string
+  resetProgress: number
+}
+
+export interface ExtraUsageInfo {
+  isEnabled: boolean
+  usedCredits: number
+  monthlyLimit: number
+  currency: string
+}
+
 export interface QuotaInfo {
-  fiveHour: {
-    utilization: number
-    resetsAt: Date
-    resetsIn: string
-    resetProgress: number
-  }
-  sevenDay: {
-    utilization: number
-    resetsAt: Date
-    resetsIn: string
-    resetProgress: number
-  }
+  fiveHour: QuotaPeriod
+  sevenDay: QuotaPeriod
+  sevenDayOpus?: QuotaPeriod
+  extraUsage?: ExtraUsageInfo
   lastUpdated: Date
   error?: QuotaError
 }

@@ -105,11 +105,16 @@ export class TrayManager {
 
     const fiveHour = Math.round(quota.fiveHour.utilization)
     const sevenDay = Math.round(quota.sevenDay.utilization)
+    const opus = quota.sevenDayOpus ? Math.round(quota.sevenDayOpus.utilization) : null
     const mode = this.getDisplayMode()
 
     switch (mode) {
       case 'detailed':
-        this.tray.setTitle(`5h: ${fiveHour}% | 7d: ${sevenDay}%`)
+        if (opus !== null) {
+          this.tray.setTitle(`5h: ${fiveHour}% | 7d: ${sevenDay}% | Opus: ${opus}%`)
+        } else {
+          this.tray.setTitle(`5h: ${fiveHour}% | 7d: ${sevenDay}%`)
+        }
         break
       case 'compact':
         this.tray.setTitle(`${fiveHour}%`)
@@ -166,9 +171,12 @@ export class TrayManager {
     const sevenDay = Math.round(quota.sevenDay.utilization)
     const lines = [
       `Session: ${fiveHour}% (resets in ${quota.fiveHour.resetsIn})`,
-      `Weekly: ${sevenDay}% (resets in ${quota.sevenDay.resetsIn})`,
-      `Updated: ${quota.lastUpdated.toLocaleTimeString()}`
+      `Weekly: ${sevenDay}% (resets in ${quota.sevenDay.resetsIn})`
     ]
+    if (quota.sevenDayOpus) {
+      lines.push(`Opus: ${Math.round(quota.sevenDayOpus.utilization)}% (resets in ${quota.sevenDayOpus.resetsIn})`)
+    }
+    lines.push(`Updated: ${quota.lastUpdated.toLocaleTimeString()}`)
     this.tray.setToolTip(lines.join('\n'))
   }
 

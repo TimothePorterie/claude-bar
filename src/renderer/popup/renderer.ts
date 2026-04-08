@@ -8,19 +8,25 @@ interface QuotaError {
   retryable: boolean
 }
 
+interface QuotaPeriod {
+  utilization: number
+  resetsAt: Date
+  resetsIn: string
+  resetProgress: number
+}
+
+interface ExtraUsageInfo {
+  isEnabled: boolean
+  usedCredits: number
+  monthlyLimit: number
+  currency: string
+}
+
 interface QuotaInfo {
-  fiveHour: {
-    utilization: number
-    resetsAt: Date
-    resetsIn: string
-    resetProgress: number
-  }
-  sevenDay: {
-    utilization: number
-    resetsAt: Date
-    resetsIn: string
-    resetProgress: number
-  }
+  fiveHour: QuotaPeriod
+  sevenDay: QuotaPeriod
+  sevenDayOpus?: QuotaPeriod
+  extraUsage?: ExtraUsageInfo
   lastUpdated: Date
   error?: QuotaError
 }
@@ -45,6 +51,15 @@ const sevenDayReset = document.getElementById('sevenDayReset') as HTMLElement
 
 const fiveHourResetProgress = document.getElementById('fiveHourResetProgress') as HTMLElement
 const sevenDayResetProgress = document.getElementById('sevenDayResetProgress') as HTMLElement
+
+const opusCard = document.getElementById('opusCard') as HTMLElement
+const opusValue = document.getElementById('opusValue') as HTMLElement
+const opusProgress = document.getElementById('opusProgress') as HTMLElement
+const opusReset = document.getElementById('opusReset') as HTMLElement
+const opusResetProgress = document.getElementById('opusResetProgress') as HTMLElement
+
+const extraUsageEl = document.getElementById('extraUsage') as HTMLElement
+const extraUsageValue = document.getElementById('extraUsageValue') as HTMLElement
 
 const lastUpdated = document.getElementById('lastUpdated') as HTMLElement
 
@@ -82,6 +97,12 @@ function hideError(): void {
   reportContentHeight()
 }
 
+function formatCredits(cents: number, currency: string): string {
+  const amount = cents / 100
+  if (currency.toUpperCase() === 'USD') return `$${amount.toFixed(2)}`
+  return `${amount.toFixed(2)} ${currency.toUpperCase()}`
+}
+
 function updateQuotaDisplay(quota: QuotaInfo): void {
   const fiveHourUtil = Math.round(quota.fiveHour.utilization)
   fiveHourValue.textContent = `${fiveHourUtil}%`
@@ -96,6 +117,33 @@ function updateQuotaDisplay(quota: QuotaInfo): void {
   sevenDayProgress.className = `progress-fill ${getProgressClass(quota.sevenDay.utilization)}`
   sevenDayReset.textContent = quota.sevenDay.resetsIn
   sevenDayResetProgress.style.width = `${quota.sevenDay.resetProgress}%`
+
+  // Opus weekly quota (Max plans)
+  if (quota.sevenDayOpus) {
+    const opusUtil = Math.round(quota.sevenDayOpus.utilization)
+    opusValue.textContent = `${opusUtil}%`
+    opusProgress.style.width = `${opusUtil}%`
+    opusProgress.className = `progress-fill ${getProgressClass(quota.sevenDayOpus.utilization)}`
+    opusReset.textContent = quota.sevenDayOpus.resetsIn
+    opusResetProgress.style.width = `${quota.sevenDayOpus.resetProgress}%`
+    opusCard.style.display = 'block'
+  } else {
+    opusCard.style.display = 'none'
+  }
+
+  // Extra usage / overage
+  if (quota.extraUsage?.isEnabled) {
+    const used = formatCredits(quota.extraUsage.usedCredits, quota.extraUsage.currency)
+    if (quota.extraUsage.monthlyLimit > 0) {
+      const limit = formatCredits(quota.extraUsage.monthlyLimit, quota.extraUsage.currency)
+      extraUsageValue.textContent = `${used} / ${limit}`
+    } else {
+      extraUsageValue.textContent = `${used} (no limit)`
+    }
+    extraUsageEl.style.display = 'flex'
+  } else {
+    extraUsageEl.style.display = 'none'
+  }
 
   const updated = new Date(quota.lastUpdated)
   lastUpdated.textContent = `Last updated: ${updated.toLocaleTimeString()}`

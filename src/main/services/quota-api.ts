@@ -8,9 +8,18 @@ export interface QuotaData {
   resets_at: string
 }
 
+export interface ExtraUsageData {
+  is_enabled: boolean
+  used_credits: number
+  monthly_limit: number
+  currency: string
+}
+
 export interface UsageResponse {
   five_hour: QuotaData
   seven_day: QuotaData
+  seven_day_opus?: QuotaData
+  extra_usage?: ExtraUsageData
 }
 
 export type QuotaErrorType = 'network' | 'auth' | 'rate_limit' | 'server' | 'unknown'
@@ -21,19 +30,25 @@ export interface QuotaError {
   retryable: boolean
 }
 
+export interface QuotaPeriod {
+  utilization: number
+  resetsAt: Date
+  resetsIn: string
+  resetProgress: number
+}
+
+export interface ExtraUsageInfo {
+  isEnabled: boolean
+  usedCredits: number
+  monthlyLimit: number
+  currency: string
+}
+
 export interface QuotaInfo {
-  fiveHour: {
-    utilization: number
-    resetsAt: Date
-    resetsIn: string
-    resetProgress: number
-  }
-  sevenDay: {
-    utilization: number
-    resetsAt: Date
-    resetsIn: string
-    resetProgress: number
-  }
+  fiveHour: QuotaPeriod
+  sevenDay: QuotaPeriod
+  sevenDayOpus?: QuotaPeriod
+  extraUsage?: ExtraUsageInfo
   lastUpdated: Date
   error?: QuotaError
 }
@@ -99,6 +114,15 @@ export class QuotaService {
           resetProgress: this.calculateResetProgress(sevenDayReset, 7 * 24)
         },
         lastUpdated: new Date(lastQuota.fetchedAt)
+      }
+      if (lastQuota.sevenDayOpus) {
+        const opusReset = new Date(lastQuota.sevenDayOpus.resetsAt)
+        this.cachedQuota.sevenDayOpus = {
+          utilization: lastQuota.sevenDayOpus.utilization,
+          resetsAt: opusReset,
+          resetsIn: this.formatTimeUntil(opusReset),
+          resetProgress: this.calculateResetProgress(opusReset, 7 * 24)
+        }
       }
       this.lastFetchTime = lastQuota.fetchedAt
       logger.info(`Restored persisted quota: 5h=${Math.round(lastQuota.fiveHour.utilization)}%, 7d=${Math.round(lastQuota.sevenDay.utilization)}% (${Math.round((Date.now() - lastQuota.fetchedAt) / 60000)}min ago)`)
@@ -244,6 +268,27 @@ export class QuotaService {
         lastUpdated: new Date()
       }
 
+      // Parse optional Opus weekly quota (Max plans)
+      if (data.seven_day_opus) {
+        const opusReset = new Date(data.seven_day_opus.resets_at)
+        this.cachedQuota.sevenDayOpus = {
+          utilization: data.seven_day_opus.utilization,
+          resetsAt: opusReset,
+          resetsIn: this.formatTimeUntil(opusReset),
+          resetProgress: this.calculateResetProgress(opusReset, 7 * 24)
+        }
+      }
+
+      // Parse optional extra usage / overage info
+      if (data.extra_usage) {
+        this.cachedQuota.extraUsage = {
+          isEnabled: data.extra_usage.is_enabled,
+          usedCredits: data.extra_usage.used_credits,
+          monthlyLimit: data.extra_usage.monthly_limit,
+          currency: data.extra_usage.currency
+        }
+      }
+
       this.lastFetchTime = Date.now()
       this.lastError = null
       this.tokenRotatedForRateLimit = false
@@ -254,14 +299,20 @@ export class QuotaService {
       }
 
       // Persist quota data for next startup
-      settingsStore.set('lastQuotaData', {
+      const persistedData: PersistedQuotaData = {
         fiveHour: { utilization: data.five_hour.utilization, resetsAt: data.five_hour.resets_at },
         sevenDay: { utilization: data.seven_day.utilization, resetsAt: data.seven_day.resets_at },
         fetchedAt: this.lastFetchTime
-      })
+      }
+      if (data.seven_day_opus) {
+        persistedData.sevenDayOpus = { utilization: data.seven_day_opus.utilization, resetsAt: data.seven_day_opus.resets_at }
+      }
+      settingsStore.set('lastQuotaData', persistedData)
 
+      const opusLog = data.seven_day_opus ? `, opus=${Math.round(data.seven_day_opus.utilization)}%` : ''
+      const overageLog = data.extra_usage?.is_enabled ? `, overage=${(data.extra_usage.used_credits / 100).toFixed(2)} ${data.extra_usage.currency}` : ''
       logger.info(
-        `Quota fetched (API): 5h=${Math.round(data.five_hour.utilization)}%, 7d=${Math.round(data.seven_day.utilization)}%`
+        `Quota fetched (API): 5h=${Math.round(data.five_hour.utilization)}%, 7d=${Math.round(data.seven_day.utilization)}%${opusLog}${overageLog}`
       )
 
       return this.cachedQuota
@@ -495,7 +546,7 @@ export class QuotaService {
   getCachedQuota(): QuotaInfo | null {
     if (!this.cachedQuota) return null
     // Recalculate time-dependent fields on every read
-    return {
+    const result: QuotaInfo = {
       ...this.cachedQuota,
       fiveHour: {
         ...this.cachedQuota.fiveHour,
@@ -508,6 +559,14 @@ export class QuotaService {
         resetProgress: this.calculateResetProgress(this.cachedQuota.sevenDay.resetsAt, 7 * 24)
       }
     }
+    if (this.cachedQuota.sevenDayOpus) {
+      result.sevenDayOpus = {
+        ...this.cachedQuota.sevenDayOpus,
+        resetsIn: this.formatTimeUntil(this.cachedQuota.sevenDayOpus.resetsAt),
+        resetProgress: this.calculateResetProgress(this.cachedQuota.sevenDayOpus.resetsAt, 7 * 24)
+      }
+    }
+    return result
   }
 
   getFormattedTitle(): string {
@@ -526,10 +585,13 @@ export class QuotaService {
       return 'normal'
     }
 
-    const maxUtilization = Math.max(
+    let maxUtilization = Math.max(
       this.cachedQuota.fiveHour.utilization,
       this.cachedQuota.sevenDay.utilization
     )
+    if (this.cachedQuota.sevenDayOpus) {
+      maxUtilization = Math.max(maxUtilization, this.cachedQuota.sevenDayOpus.utilization)
+    }
 
     if (maxUtilization >= CRITICAL_THRESHOLD) return 'critical'
     if (maxUtilization >= WARNING_THRESHOLD) return 'warning'

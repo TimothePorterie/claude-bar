@@ -423,6 +423,29 @@ body {
   transition: width 0.5s ease;
 }
 
+/* Extra usage / overage */
+.extra-usage {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 8px;
+}
+
+.extra-usage-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6366f1;
+}
+
+.extra-usage-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+
 /* Time to critical warning */
 .time-to-critical {
   display: flex;
@@ -738,6 +761,19 @@ body {
   .error-section.warning .error-retry-btn {
     background: rgba(245, 158, 11, 0.2);
     color: #fbbf24;
+  }
+
+  .extra-usage {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.25);
+  }
+
+  .extra-usage-label {
+    color: #818cf8;
+  }
+
+  .extra-usage-value {
+    color: #c4b5fd;
   }
 
   .error-guidance {
