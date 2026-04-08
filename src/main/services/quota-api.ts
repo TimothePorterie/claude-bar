@@ -134,12 +134,15 @@ export class QuotaService {
     return this._wasThrottled
   }
 
-  getForceIntervalRemainingMs(): number {
-    return Math.max(0, MIN_FORCE_INTERVAL_MS - (Date.now() - this.lastFetchTime))
+  getThrottleRemainingMs(): number {
+    const forceInterval = Math.max(0, MIN_FORCE_INTERVAL_MS - (Date.now() - this.lastFetchTime))
+    const rateLimit = this.getRateLimitRemainingMs()
+    return Math.max(forceInterval, rateLimit)
   }
 
   private async doFetch(): Promise<QuotaInfo | null> {
     if (Date.now() < this.rateLimitedUntil) {
+      this._wasThrottled = true
       if (this.cachedQuota) {
         return this.getCachedQuota()!
       }

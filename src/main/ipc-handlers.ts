@@ -50,7 +50,7 @@ export function setupIpcHandlers(): void {
       return {
         quota: quotaService.getCachedQuota(),
         throttled: quotaService.wasThrottled(),
-        retryIn: Math.ceil(quotaService.getForceIntervalRemainingMs() / 1000)
+        retryIn: Math.ceil(quotaService.getThrottleRemainingMs() / 1000)
       }
     } catch (error) {
       logger.error('IPC refresh-quota error:', error)
