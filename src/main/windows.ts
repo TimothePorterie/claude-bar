@@ -210,7 +210,8 @@ export class WindowManager {
     })
 
     this.popupWindow.once('ready-to-show', () => {
-      this.popupWindow?.show()
+      this.popupWindow?.showInactive()
+      this.popupWindow?.focus()
     })
 
     return this.popupWindow
@@ -230,7 +231,8 @@ export class WindowManager {
         const y = trayBounds.y + trayBounds.height + 5
         this.popupWindow.setPosition(x, y)
       }
-      this.popupWindow.show()
+      this.popupWindow.showInactive()
+      this.popupWindow.focus()
     }
   }
 
