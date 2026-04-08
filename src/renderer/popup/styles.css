@@ -120,6 +120,10 @@ body {
   opacity: 1;
 }
 
+.toast.info {
+  background: rgba(100, 116, 139, 0.95);
+}
+
 /* Error section */
 .error-section {
   display: flex;

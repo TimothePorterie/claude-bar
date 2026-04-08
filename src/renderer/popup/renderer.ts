@@ -286,6 +286,19 @@ async function loadQuota(): Promise<void> {
   }
 }
 
+const toast = document.getElementById('toast') as HTMLElement
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+function showToast(message: string, variant: 'info' | 'success' = 'success'): void {
+  if (toastTimer) clearTimeout(toastTimer)
+  toast.textContent = message
+  toast.className = `toast ${variant} show`
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('show')
+  }, 2000)
+  reportContentHeight()
+}
+
 async function refreshQuota(): Promise<void> {
   refreshBtn.classList.add('loading')
   refreshBtn.disabled = true
@@ -299,10 +312,12 @@ async function refreshQuota(): Promise<void> {
     }
 
     // Then attempt an API refresh (may return cache if min interval not elapsed)
-    const quota = await window.claudeBar.refreshQuota()
-    if (quota) {
+    const result = await window.claudeBar.refreshQuota()
+    if (result.throttled) {
+      showToast(`Already up to date — retry in ${result.retryIn}s`, 'info')
+    } else if (result.quota) {
       showConnectedState()
-      updateQuotaDisplay(quota)
+      updateQuotaDisplay(result.quota)
       hideError()
     }
   } catch (error) {

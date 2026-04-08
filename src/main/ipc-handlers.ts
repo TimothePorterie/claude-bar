@@ -37,13 +37,17 @@ export function setupIpcHandlers(): void {
   })
 
   // Force refresh quota (bypass min-interval)
-  ipcMain.handle('refresh-quota', async (): Promise<QuotaInfo | null> => {
+  ipcMain.handle('refresh-quota', async () => {
     try {
       await schedulerService.refresh(true)
-      return quotaService.getCachedQuota()
+      return {
+        quota: quotaService.getCachedQuota(),
+        throttled: quotaService.wasThrottled(),
+        retryIn: Math.ceil(quotaService.getForceIntervalRemainingMs() / 1000)
+      }
     } catch (error) {
       logger.error('IPC refresh-quota error:', error)
-      return null
+      return { quota: null, throttled: false, retryIn: 0 }
     }
   })
 

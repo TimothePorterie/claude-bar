@@ -47,7 +47,8 @@ export interface UserInfo {
 const api = {
   // Quota operations
   getQuota: (): Promise<QuotaInfo | null> => ipcRenderer.invoke('get-quota'),
-  refreshQuota: (): Promise<QuotaInfo | null> => ipcRenderer.invoke('refresh-quota'),
+  refreshQuota: (): Promise<{ quota: QuotaInfo | null; throttled: boolean; retryIn: number }> =>
+    ipcRenderer.invoke('refresh-quota'),
   onQuotaUpdated: (callback: (quota: QuotaInfo) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, quota: QuotaInfo): void => callback(quota)
     ipcRenderer.on('quota-updated', handler)

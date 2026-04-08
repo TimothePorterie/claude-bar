@@ -79,6 +79,7 @@ export class QuotaService {
   private cachedQuota: QuotaInfo | null = null
   private lastFetchTime: number = 0
   private lastError: QuotaError | null = null
+  private _wasThrottled = false
   private rateLimitedUntil: number
   private rateLimitRemaining: number | null = null
   private pendingFetch: Promise<QuotaInfo | null> | null = null
@@ -132,25 +133,37 @@ export class QuotaService {
   async fetchQuota(force = false): Promise<QuotaInfo | null> {
     // If a fetch is already in progress, wait for its result (dedup concurrent calls)
     if (this.pendingFetch) {
+      this._wasThrottled = false
       return this.pendingFetch
     }
 
     // Absolute minimum between API calls — prevents spam even on manual refresh
     if (this.cachedQuota && Date.now() - this.lastFetchTime < MIN_FORCE_INTERVAL_MS) {
+      this._wasThrottled = true
       return this.getCachedQuota()!
     }
 
     // Enforce longer minimum for scheduled (non-forced) fetches
     if (!force && this.cachedQuota && Date.now() - this.lastFetchTime < MIN_FETCH_INTERVAL_MS) {
+      this._wasThrottled = true
       return this.getCachedQuota()!
     }
 
+    this._wasThrottled = false
     this.pendingFetch = this.doFetch()
     try {
       return await this.pendingFetch
     } finally {
       this.pendingFetch = null
     }
+  }
+
+  wasThrottled(): boolean {
+    return this._wasThrottled
+  }
+
+  getForceIntervalRemainingMs(): number {
+    return Math.max(0, MIN_FORCE_INTERVAL_MS - (Date.now() - this.lastFetchTime))
   }
 
   private async doFetch(): Promise<QuotaInfo | null> {
