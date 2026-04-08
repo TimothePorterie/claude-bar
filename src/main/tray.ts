@@ -7,6 +7,7 @@ import { logger } from './services/logger'
 import { windowManager } from './windows'
 import { settingsStore } from './services/settings-store'
 import { notificationService } from './services/notifications'
+import { t } from '../shared/i18n'
 
 type DisplayMode = 'standard' | 'detailed' | 'compact' | 'minimal' | 'time-remaining'
 
@@ -88,13 +89,12 @@ export class TrayManager {
   updateTitle(): void {
     if (!this.tray) return
 
-    // If no cached quota and there's a real error, show error indicator
     const lastError = quotaService.getLastError()
     if (!quotaService.getCachedQuota() && lastError && lastError.type !== 'rate_limit') {
       if (lastError.type === 'auth') {
-        this.tray.setTitle('⚠ Login')
+        this.tray.setTitle('\u26a0 Login')
       } else {
-        this.tray.setTitle('⚠ Error')
+        this.tray.setTitle('\u26a0 Error')
       }
       return
     }
@@ -113,9 +113,9 @@ export class TrayManager {
     switch (mode) {
       case 'detailed':
         if (opus !== null) {
-          this.tray.setTitle(`5h: ${fiveHour}% | 7d: ${sevenDay}% | Opus: ${opus}%`)
+          this.tray.setTitle(t('tray.detailedOpusFmt', { five: fiveHour, seven: sevenDay, opus }))
         } else {
-          this.tray.setTitle(`5h: ${fiveHour}% | 7d: ${sevenDay}%`)
+          this.tray.setTitle(t('tray.detailedFmt', { five: fiveHour, seven: sevenDay }))
         }
         break
       case 'compact':
@@ -135,7 +135,6 @@ export class TrayManager {
   updateIcon(): void {
     if (!this.tray) return
 
-    // Use warning icon if there's a real error and no cached data
     const lastError = quotaService.getLastError()
     if (!quotaService.getCachedQuota() && lastError && lastError.type !== 'rate_limit') {
       const iconPath = this.getIconPath('warning')
@@ -162,9 +161,9 @@ export class TrayManager {
     if (!quota) {
       const lastError = quotaService.getLastError()
       if (lastError) {
-        this.tray.setToolTip(`Claude Bar — ${lastError.message}`)
+        this.tray.setToolTip(`Claude Bar \u2014 ${lastError.message}`)
       } else {
-        this.tray.setToolTip('Claude Bar — Click to view quotas')
+        this.tray.setToolTip(t('tray.clickToView'))
       }
       return
     }
@@ -172,13 +171,13 @@ export class TrayManager {
     const fiveHour = Math.round(quota.fiveHour.utilization)
     const sevenDay = Math.round(quota.sevenDay.utilization)
     const lines = [
-      `Session: ${fiveHour}% (resets in ${quota.fiveHour.resetsIn})`,
-      `Weekly: ${sevenDay}% (resets in ${quota.sevenDay.resetsIn})`
+      t('tray.session', { pct: fiveHour, resets: quota.fiveHour.resetsIn }),
+      t('tray.weekly', { pct: sevenDay, resets: quota.sevenDay.resetsIn })
     ]
     if (quota.sevenDayOpus) {
-      lines.push(`Opus: ${Math.round(quota.sevenDayOpus.utilization)}% (resets in ${quota.sevenDayOpus.resetsIn})`)
+      lines.push(t('tray.opus', { pct: Math.round(quota.sevenDayOpus.utilization), resets: quota.sevenDayOpus.resetsIn }))
     }
-    lines.push(`Updated: ${quota.lastUpdated.toLocaleTimeString()}`)
+    lines.push(t('tray.updated', { time: quota.lastUpdated.toLocaleTimeString() }))
     this.tray.setToolTip(lines.join('\n'))
   }
 
@@ -187,41 +186,41 @@ export class TrayManager {
 
     const contextMenu = Menu.buildFromTemplate([
       {
-        label: 'Refresh',
+        label: t('tray.refresh'),
         click: () => {
           schedulerService.refresh(true)
         }
       },
       { type: 'separator' },
       {
-        label: 'Display Mode',
+        label: t('tray.displayMode'),
         submenu: [
           {
-            label: 'Standard (45% / 32%)',
+            label: t('tray.standard'),
             type: 'radio',
             checked: currentMode === 'standard',
             click: () => this.setDisplayMode('standard')
           },
           {
-            label: 'Detailed (5h: 45% | 7d: 32%)',
+            label: t('tray.detailed'),
             type: 'radio',
             checked: currentMode === 'detailed',
             click: () => this.setDisplayMode('detailed')
           },
           {
-            label: 'Compact (45%)',
+            label: t('tray.compact'),
             type: 'radio',
             checked: currentMode === 'compact',
             click: () => this.setDisplayMode('compact')
           },
           {
-            label: 'Time Remaining (4h 30m)',
+            label: t('tray.timeRemaining'),
             type: 'radio',
             checked: currentMode === 'time-remaining',
             click: () => this.setDisplayMode('time-remaining')
           },
           {
-            label: 'Minimal (icon only)',
+            label: t('tray.minimal'),
             type: 'radio',
             checked: currentMode === 'minimal',
             click: () => this.setDisplayMode('minimal')
@@ -230,7 +229,7 @@ export class TrayManager {
       },
       { type: 'separator' },
       {
-        label: 'Settings...',
+        label: t('tray.settings'),
         click: () => {
           if (this.onShowSettings) {
             this.onShowSettings()
@@ -238,14 +237,14 @@ export class TrayManager {
         }
       },
       {
-        label: 'Check for Updates...',
+        label: t('tray.checkUpdates'),
         click: () => {
           updaterService.checkForUpdates()
         }
       },
       { type: 'separator' },
       {
-        label: 'Quit Claude Bar',
+        label: t('tray.quit'),
         click: () => {
           app.quit()
         }

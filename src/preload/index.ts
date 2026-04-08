@@ -36,6 +36,7 @@ export interface Settings {
   launchAtLogin: boolean
   authMode: 'app' | 'cli'
   enableNotifications: boolean
+  language: 'en' | 'fr'
 }
 
 export interface UserInfo {
@@ -77,6 +78,8 @@ const api = {
     ipcRenderer.invoke('set-auth-mode', mode),
   setEnableNotifications: (enabled: boolean): Promise<boolean> =>
     ipcRenderer.invoke('set-enable-notifications', enabled),
+  setLanguage: (lang: string): Promise<boolean> =>
+    ipcRenderer.invoke('set-language', lang),
 
   // Auth
   startLogin: (): Promise<boolean> => ipcRenderer.invoke('auth-start-login'),

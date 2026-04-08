@@ -7,6 +7,7 @@ import { updaterService } from './services/updater'
 import { logger } from './services/logger'
 import { windowManager } from './windows'
 import { settingsStore as store } from './services/settings-store'
+import { setLocale, t, Locale } from '../shared/i18n'
 
 // Input validation helpers
 const VALID_REFRESH_INTERVALS = [300, 600, 900] as const
@@ -20,9 +21,14 @@ function isValidBoolean(value: unknown): value is boolean {
 }
 
 const VALID_AUTH_MODES = ['app', 'cli'] as const
+const VALID_LANGUAGES = ['en', 'fr'] as const
 
 function isValidAuthMode(value: unknown): value is 'app' | 'cli' {
   return typeof value === 'string' && VALID_AUTH_MODES.includes(value as 'app' | 'cli')
+}
+
+function isValidLanguage(value: unknown): value is Locale {
+  return typeof value === 'string' && VALID_LANGUAGES.includes(value as Locale)
 }
 
 export function setupIpcHandlers(): void {
@@ -97,7 +103,8 @@ export function setupIpcHandlers(): void {
         refreshInterval: store.get('refreshInterval'),
         launchAtLogin: store.get('launchAtLogin'),
         authMode: store.get('authMode'),
-        enableNotifications: store.get('enableNotifications')
+        enableNotifications: store.get('enableNotifications'),
+        language: store.get('language')
       }
     } catch (error) {
       logger.error('IPC get-settings error:', error)
@@ -105,7 +112,8 @@ export function setupIpcHandlers(): void {
         refreshInterval: 300,
         launchAtLogin: false,
         authMode: 'app',
-        enableNotifications: true
+        enableNotifications: true,
+        language: 'en'
       }
     }
   })
@@ -180,6 +188,23 @@ export function setupIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('set-language', (_event, lang: unknown) => {
+    if (!isValidLanguage(lang)) {
+      logger.warn(`Invalid language rejected: ${lang}`)
+      return false
+    }
+
+    try {
+      store.set('language', lang)
+      setLocale(lang)
+      logger.info(`Language set to '${lang}'`)
+      return true
+    } catch (error) {
+      logger.error('IPC set-language error:', error)
+      return false
+    }
+  })
+
   // Get last error
   ipcMain.handle('get-last-error', () => {
     try {
@@ -204,13 +229,13 @@ export function setupIpcHandlers(): void {
     'auth-submit-code',
     async (_event, code: unknown): Promise<{ success: boolean; error?: string }> => {
       if (typeof code !== 'string') {
-        return { success: false, error: 'Invalid code format.' }
+        return { success: false, error: t('error.invalidCodeFormat') }
       }
       try {
         return await authService.submitCode(code)
       } catch (error) {
         logger.error('IPC auth-submit-code error:', error)
-        return { success: false, error: 'An unexpected error occurred.' }
+        return { success: false, error: t('error.unexpected') }
       }
     }
   )
@@ -313,6 +338,11 @@ export function loadSettings(): void {
     const launchAtLogin = store.get('launchAtLogin')
     if (isValidBoolean(launchAtLogin) && app.isPackaged) {
       app.setLoginItemSettings({ openAtLogin: launchAtLogin })
+    }
+
+    const language = store.get('language')
+    if (isValidLanguage(language)) {
+      setLocale(language)
     }
 
     logger.info('Settings loaded')

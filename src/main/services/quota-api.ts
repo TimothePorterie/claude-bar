@@ -2,6 +2,7 @@ import { keychainService, Credentials } from './keychain'
 import { authService } from './auth'
 import { logger } from './logger'
 import { settingsStore, PersistedQuotaData } from './settings-store'
+import { t } from '../../shared/i18n'
 
 export interface QuotaData {
   utilization: number
@@ -241,7 +242,7 @@ export class QuotaService {
       const credentials = await this.getCredentials()
 
       if (!credentials) {
-        this.lastError = { type: 'auth', message: 'No credentials found. Please log in.', retryable: false }
+        this.lastError = { type: 'auth', message: t('error.noCredentials'), retryable: false }
         return null
       }
 
@@ -382,7 +383,7 @@ export class QuotaService {
             return response
           }
         }
-        this.lastError = { type: 'auth', message: 'Session expired. Please log in again.', retryable: false }
+        this.lastError = { type: 'auth', message: t('error.sessionExpired'), retryable: false }
         return null
       }
 
@@ -412,6 +413,7 @@ export class QuotaService {
         this.applyRateLimitHeaders(response)
         logger.warn(`Rate limited (429), cooldown ${cooldownSec}s (retry-after=${serverSec}s)`)
         this.lastError = { type: 'rate_limit', message: this.formatRateLimitMessage(), retryable: true }
+
         return null
       }
 
@@ -463,18 +465,18 @@ export class QuotaService {
   private classifyError(error: unknown): QuotaError {
     // Check error type/name first, then fall back to message matching
     if (error instanceof TypeError && error.message.includes('fetch')) {
-      return { type: 'network', message: 'Unable to connect. Check your internet connection.', retryable: true }
+      return { type: 'network', message: t('error.network'), retryable: true }
     }
 
     if (error instanceof DOMException && error.name === 'AbortError') {
-      return { type: 'network', message: 'Request timed out. Will retry automatically.', retryable: true }
+      return { type: 'network', message: t('error.timeout'), retryable: true }
     }
 
     // Node.js system errors (ENOTFOUND, ECONNREFUSED, ECONNRESET, etc.)
     if (error instanceof Error && 'code' in error) {
       const code = (error as NodeJS.ErrnoException).code
       if (code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ETIMEDOUT') {
-        return { type: 'network', message: 'Unable to connect. Check your internet connection.', retryable: true }
+        return { type: 'network', message: t('error.network'), retryable: true }
       }
     }
 
@@ -484,17 +486,17 @@ export class QuotaService {
     if (httpMatch) {
       const status = parseInt(httpMatch[1], 10)
       if (status === 401 || status === 403) {
-        return { type: 'auth', message: 'Session expired. Please log in again from Settings.', retryable: false }
+        return { type: 'auth', message: t('error.sessionExpiredSettings'), retryable: false }
       }
       if (status === 429) {
-        return { type: 'rate_limit', message: 'Rate limited. Will retry automatically.', retryable: true }
+        return { type: 'rate_limit', message: t('error.rateLimited'), retryable: true }
       }
       if (status >= 500) {
-        return { type: 'server', message: 'Server error. Will retry automatically.', retryable: true }
+        return { type: 'server', message: t('error.server'), retryable: true }
       }
     }
 
-    return { type: 'unknown', message: 'An unexpected error occurred.', retryable: true }
+    return { type: 'unknown', message: t('error.unexpected'), retryable: true }
   }
 
   getLastError(): QuotaError | null {
@@ -511,12 +513,12 @@ export class QuotaService {
 
   private formatRateLimitMessage(): string {
     const remainingMs = this.getRateLimitRemainingMs()
-    if (remainingMs <= 0) return 'Rate limited. Retrying...'
+    if (remainingMs <= 0) return t('error.rateLimitRetrying')
     const remainingSec = Math.ceil(remainingMs / 1000)
     if (remainingSec >= 60) {
-      return `Rate limited. Retry in ${Math.ceil(remainingSec / 60)}min.`
+      return t('error.rateLimitRetryMin', { min: Math.ceil(remainingSec / 60) })
     }
-    return `Rate limited. Retry in ${remainingSec}s.`
+    return t('error.rateLimitRetrySec', { sec: remainingSec })
   }
 
   private formatTimeUntil(date: Date): string {
@@ -524,7 +526,7 @@ export class QuotaService {
     const diffMs = date.getTime() - now.getTime()
 
     if (diffMs <= 0) {
-      return 'Now'
+      return t('time.now')
     }
 
     const diffMinutes = Math.floor(diffMs / (1000 * 60))

@@ -2,6 +2,7 @@ import { safeStorage, shell } from 'electron'
 import crypto from 'crypto'
 import Store from 'electron-store'
 import { logger } from './logger'
+import { t } from '../../shared/i18n'
 
 export type AuthState = 'authenticated' | 'unauthenticated' | 'expired' | 'refreshing'
 
@@ -116,12 +117,12 @@ export class AuthService {
 
   async submitCode(rawCode: string): Promise<{ success: boolean; error?: string }> {
     if (!this.codeVerifier) {
-      return { success: false, error: 'No login in progress. Please click "Log In" first.' }
+      return { success: false, error: t('auth.noLoginInProgress') }
     }
 
     const trimmed = rawCode.trim()
     if (!trimmed || trimmed.length < 5) {
-      return { success: false, error: 'Invalid authorization code.' }
+      return { success: false, error: t('auth.invalidCode') }
     }
 
     // The callback page provides code#state — split on #
@@ -169,7 +170,7 @@ export class AuthService {
         logger.error(`Token exchange failed: ${response.status} - ${errorText}`)
         this.codeVerifier = null
         this.stateParam = null
-        return { success: false, error: `Authentication failed (${response.status}). Please try again.` }
+        return { success: false, error: t('auth.authFailed', { status: response.status }) }
       }
 
       const rawData = (await response.json()) as Record<string, unknown>
@@ -179,7 +180,7 @@ export class AuthService {
         logger.error('Token exchange returned incomplete data')
         this.codeVerifier = null
         this.stateParam = null
-        return { success: false, error: 'Received incomplete token data.' }
+        return { success: false, error: t('auth.incompleteToken') }
       }
 
       // Store encrypted tokens
@@ -200,11 +201,11 @@ export class AuthService {
 
       if (error instanceof Error && error.name === 'AbortError') {
         logger.error('Token exchange timed out')
-        return { success: false, error: 'Request timed out. Please try again.' }
+        return { success: false, error: t('auth.timeout') }
       }
 
       logger.error('Token exchange error:', error instanceof Error ? error.message : String(error))
-      return { success: false, error: 'Network error. Please check your connection and try again.' }
+      return { success: false, error: t('auth.networkError') }
     }
   }
 

@@ -11,10 +11,10 @@
       <!-- Header with user info -->
       <div class="header" id="header">
         <div class="user-info">
-          <span class="user-name" id="userName">Loading...</span>
+          <span class="user-name" id="userName" data-i18n="popup.loading">Loading...</span>
           <span class="badge" id="subscriptionBadge">Pro</span>
         </div>
-        <button class="refresh-btn" id="refreshBtn" title="Refresh">
+        <button class="refresh-btn" id="refreshBtn" data-i18n-title="popup.refresh" title="Refresh">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M23 4v6h-6M1 20v-6h6"/>
             <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
@@ -53,14 +53,14 @@
         <!-- 5-hour session quota -->
         <div class="quota-card" id="fiveHourCard">
           <div class="quota-header">
-            <span class="quota-title">Session (5h)</span>
+            <span class="quota-title" data-i18n="popup.session">Session (5h)</span>
             <span class="quota-value" id="fiveHourValue">--%</span>
           </div>
           <div class="progress-bar">
             <div class="progress-fill" id="fiveHourProgress"></div>
           </div>
           <div class="quota-footer">
-            <span class="reset-label">Resets in</span>
+            <span class="reset-label" data-i18n="popup.resetsIn">Resets in</span>
             <span class="reset-value" id="fiveHourReset">--</span>
           </div>
           <div class="reset-progress-bar">
@@ -71,14 +71,14 @@
         <!-- 7-day weekly quota -->
         <div class="quota-card" id="sevenDayCard">
           <div class="quota-header">
-            <span class="quota-title">Weekly (7d)</span>
+            <span class="quota-title" data-i18n="popup.weekly">Weekly (7d)</span>
             <span class="quota-value" id="sevenDayValue">--%</span>
           </div>
           <div class="progress-bar">
             <div class="progress-fill" id="sevenDayProgress"></div>
           </div>
           <div class="quota-footer">
-            <span class="reset-label">Resets in</span>
+            <span class="reset-label" data-i18n="popup.resetsIn">Resets in</span>
             <span class="reset-value" id="sevenDayReset">--</span>
           </div>
           <div class="reset-progress-bar">
@@ -89,14 +89,14 @@
         <!-- Opus weekly quota (Max plans only) -->
         <div class="quota-card" id="opusCard" style="display: none;">
           <div class="quota-header">
-            <span class="quota-title">Opus (7d)</span>
+            <span class="quota-title" data-i18n="popup.opus">Opus (7d)</span>
             <span class="quota-value" id="opusValue">--%</span>
           </div>
           <div class="progress-bar">
             <div class="progress-fill" id="opusProgress"></div>
           </div>
           <div class="quota-footer">
-            <span class="reset-label">Resets in</span>
+            <span class="reset-label" data-i18n="popup.resetsIn">Resets in</span>
             <span class="reset-value" id="opusReset">--</span>
           </div>
           <div class="reset-progress-bar">
@@ -106,7 +106,7 @@
 
         <!-- Extra usage / overage info -->
         <div class="extra-usage" id="extraUsage" style="display: none;">
-          <span class="extra-usage-label">Overage</span>
+          <span class="extra-usage-label" data-i18n="popup.overage">Overage</span>
           <span class="extra-usage-value" id="extraUsageValue">--</span>
         </div>
       </div>
@@ -125,11 +125,11 @@
           </svg>
         </div>
         <div class="error-content">
-          <span class="error-message" id="errorMessage">Error loading quota</span>
+          <span class="error-message" id="errorMessage" data-i18n="error.loading">Error loading quota</span>
           <span class="error-guidance" id="errorGuidance"></span>
           <div class="error-actions">
-            <button class="error-retry-btn" id="errorRetryBtn">Retry</button>
-            <button class="error-login-btn" id="errorLoginBtn" style="display: none;">Log In</button>
+            <button class="error-retry-btn" id="errorRetryBtn" data-i18n="popup.retry">Retry</button>
+            <button class="error-login-btn" id="errorLoginBtn" style="display: none;" data-i18n="popup.login">Log In</button>
           </div>
         </div>
       </div>
@@ -142,11 +142,12 @@
             <path d="M12 8v4M12 16h.01"/>
           </svg>
         </div>
-        <h3>Not Connected</h3>
-        <p>Log in to monitor your Claude Code quotas</p>
-        <button class="popup-login-btn" id="popupLoginBtn">Log In</button>
-        <p class="not-connected-hint">Or via CLI: <code>claude login</code></p>
+        <h3 data-i18n="popup.notConnected">Not Connected</h3>
+        <p data-i18n="popup.notConnectedDesc">Log in to monitor your Claude Code quotas</p>
+        <button class="popup-login-btn" id="popupLoginBtn" data-i18n="popup.login">Log In</button>
+        <p class="not-connected-hint"><span data-i18n="popup.cliHint">Or via CLI:</span> <code>claude login</code></p>
       </div>
+
       <!-- Toast -->
       <div class="toast" id="toast"></div>
     </div>

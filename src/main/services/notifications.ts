@@ -1,7 +1,8 @@
 import { Notification } from 'electron'
-import { quotaService, QuotaInfo } from './quota-api'
+import { quotaService } from './quota-api'
 import { settingsStore } from './settings-store'
 import { logger } from './logger'
+import { t } from '../../shared/i18n'
 
 type QuotaLevel = 'normal' | 'warning' | 'critical'
 
@@ -22,10 +23,10 @@ export class NotificationService {
     const quota = quotaService.getCachedQuota()
     if (!quota) return
 
-    this.checkPeriod('Session (5h)', quota.fiveHour.utilization)
-    this.checkPeriod('Weekly (7d)', quota.sevenDay.utilization)
+    this.checkPeriod(t('popup.session'), quota.fiveHour.utilization)
+    this.checkPeriod(t('popup.weekly'), quota.sevenDay.utilization)
     if (quota.sevenDayOpus) {
-      this.checkPeriod('Opus (7d)', quota.sevenDayOpus.utilization)
+      this.checkPeriod(t('popup.opus'), quota.sevenDayOpus.utilization)
     }
   }
 
@@ -39,17 +40,16 @@ export class NotificationService {
     if (LEVEL_PRIORITY[newLevel] <= LEVEL_PRIORITY[previousLevel]) return
 
     const pct = Math.round(utilization)
-    if (newLevel === 'critical') {
-      this.send(`${label} at ${pct}%`, 'Quota almost exhausted. Consider slowing down.')
-    } else {
-      this.send(`${label} at ${pct}%`, 'Quota usage is getting high.')
-    }
+    const title = t('notification.thresholdTitle', { label, pct })
+    const body =
+      newLevel === 'critical' ? t('notification.critical') : t('notification.warning')
+    this.send(title, body)
   }
 
   private send(title: string, body: string): void {
     if (!Notification.isSupported()) return
 
-    const notification = new Notification({ title: `Claude Bar — ${title}`, body })
+    const notification = new Notification({ title: t('notification.prefix', { title }), body })
     notification.show()
     logger.info(`Notification: ${title}`)
   }

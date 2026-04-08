@@ -1,4 +1,5 @@
 // Popup renderer script
+import { t, setLocale, applyI18n, Locale } from '../../shared/i18n'
 
 type QuotaErrorType = 'network' | 'auth' | 'rate_limit' | 'server' | 'unknown'
 
@@ -146,7 +147,7 @@ function updateQuotaDisplay(quota: QuotaInfo): void {
   }
 
   const updated = new Date(quota.lastUpdated)
-  lastUpdated.textContent = `Last updated: ${updated.toLocaleTimeString()}`
+  lastUpdated.textContent = t('popup.lastUpdated', { time: updated.toLocaleTimeString() })
 
   // Show error banner for real errors, not for rate limits (cached data is still valid)
   if (quota.error && quota.error.type !== 'rate_limit') {
@@ -198,22 +199,22 @@ function showFetchErrorState(error: QuotaError): void {
 
   switch (error.type) {
     case 'auth':
-      errorGuidance.textContent = 'Your session has expired or credentials are invalid.'
+      errorGuidance.textContent = t('error.authGuidance')
       errorRetryBtn.style.display = 'none'
       errorLoginBtn.style.display = 'inline-block'
       break
     case 'network':
-      errorGuidance.textContent = 'Check your internet connection and try again.'
+      errorGuidance.textContent = t('error.networkGuidance')
       errorRetryBtn.style.display = 'inline-block'
       errorLoginBtn.style.display = 'none'
       break
     case 'rate_limit':
-      errorGuidance.textContent = 'Too many requests. Will retry automatically.'
+      errorGuidance.textContent = t('error.rateLimitGuidance')
       errorRetryBtn.style.display = 'inline-block'
       errorLoginBtn.style.display = 'none'
       break
     case 'server':
-      errorGuidance.textContent = 'Anthropic servers are having issues.'
+      errorGuidance.textContent = t('error.serverGuidance')
       errorRetryBtn.style.display = 'inline-block'
       errorLoginBtn.style.display = 'none'
       break
@@ -244,7 +245,7 @@ async function loadUserInfo(): Promise<void> {
   try {
     const userInfo = await window.claudeBar.getUserInfo()
     if (userInfo) {
-      userName.textContent = userInfo.name || userInfo.email || 'Claude User'
+      userName.textContent = userInfo.name || userInfo.email || t('popup.defaultUser')
       subscriptionBadge.textContent = formatSubscriptionType(userInfo.subscriptionType)
     }
   } catch (error) {
@@ -282,7 +283,7 @@ async function loadQuota(): Promise<void> {
     }
   } catch (error) {
     console.error('Failed to load quota:', error)
-    lastUpdated.textContent = 'Error loading quota'
+    lastUpdated.textContent = t('error.loading')
   }
 }
 
@@ -314,7 +315,7 @@ async function refreshQuota(): Promise<void> {
     // Then attempt an API refresh (may return cache if min interval not elapsed)
     const result = await window.claudeBar.refreshQuota()
     if (result.throttled) {
-      showToast(`Already up to date — retry in ${result.retryIn}s`, 'info')
+      showToast(t('popup.throttled', { seconds: result.retryIn }), 'info')
     } else if (result.quota) {
       showConnectedState()
       updateQuotaDisplay(result.quota)
@@ -380,7 +381,13 @@ function reportContentHeight(): void {
   })
 }
 
-// Initial load
-loadQuota().finally(() => {
+// Initialize locale then load
+async function init(): Promise<void> {
+  const settings = await window.claudeBar.getSettings()
+  setLocale(settings.language as Locale)
+  applyI18n()
+  await loadQuota()
   initialLoadDone = true
-})
+}
+
+init()

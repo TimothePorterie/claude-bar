@@ -12,6 +12,7 @@ interface SettingsStoreSchema {
   launchAtLogin: boolean
   authMode: 'app' | 'cli'
   enableNotifications: boolean
+  language: 'en' | 'fr'
   rateLimitedUntil: number
   lastQuotaData: PersistedQuotaData | null
   displayMode: string
@@ -25,6 +26,7 @@ export const settingsStore = new Store<SettingsStoreSchema>({
     launchAtLogin: false,
     authMode: 'app' as const,
     enableNotifications: true,
+    language: 'en' as const,
     rateLimitedUntil: 0,
     lastQuotaData: null,
     displayMode: 'standard'

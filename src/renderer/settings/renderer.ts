@@ -1,4 +1,5 @@
 // Settings renderer script
+import { t, setLocale, applyI18n, Locale } from '../../shared/i18n'
 
 // DOM elements
 const connectionStatus = document.getElementById('connectionStatus') as HTMLElement
@@ -13,6 +14,7 @@ const authCodeInput = document.getElementById('authCodeInput') as HTMLInputEleme
 const validateBtn = document.getElementById('validateBtn') as HTMLButtonElement
 const cancelLoginBtn = document.getElementById('cancelLoginBtn') as HTMLButtonElement
 const authError = document.getElementById('authError') as HTMLElement
+const language = document.getElementById('language') as HTMLSelectElement
 const refreshInterval = document.getElementById('refreshInterval') as HTMLSelectElement
 const enableNotifications = document.getElementById('enableNotifications') as HTMLInputElement
 const launchAtLogin = document.getElementById('launchAtLogin') as HTMLInputElement
@@ -20,7 +22,7 @@ const launchAtLogin = document.getElementById('launchAtLogin') as HTMLInputEleme
 function showConnectedUI(email: string): void {
   connectionStatus.style.display = 'flex'
   statusIndicator.classList.add('connected')
-  statusText.textContent = 'Connected'
+  statusText.textContent = t('settings.connected')
   statusEmail.textContent = email
   logoutBtn.style.display = 'block'
   notConnectedHelp.style.display = 'none'
@@ -30,8 +32,8 @@ function showConnectedUI(email: string): void {
 function showNotConnectedUI(): void {
   connectionStatus.style.display = 'flex'
   statusIndicator.classList.remove('connected')
-  statusText.textContent = 'Not Connected'
-  statusEmail.textContent = 'No credentials found'
+  statusText.textContent = t('settings.notConnected')
+  statusEmail.textContent = t('settings.noCredentials')
   logoutBtn.style.display = 'none'
   authCodeSection.style.display = 'none'
   notConnectedHelp.style.display = 'block'
@@ -60,14 +62,15 @@ async function loadConnectionStatus(): Promise<void> {
   } catch (error) {
     console.error('Failed to load connection status:', error)
     statusIndicator.classList.remove('connected')
-    statusText.textContent = 'Error'
-    statusEmail.textContent = 'Could not check credentials'
+    statusText.textContent = t('settings.error')
+    statusEmail.textContent = t('settings.credentialsError')
   }
 }
 
 async function loadSettings(): Promise<void> {
   try {
     const settings = await window.claudeBar.getSettings()
+    language.value = settings.language
     refreshInterval.value = settings.refreshInterval.toString()
     enableNotifications.checked = settings.enableNotifications
     launchAtLogin.checked = settings.launchAtLogin
@@ -77,6 +80,17 @@ async function loadSettings(): Promise<void> {
 }
 
 // Event listeners
+language.addEventListener('change', async () => {
+  const lang = language.value as Locale
+  try {
+    await window.claudeBar.setLanguage(lang)
+    setLocale(lang)
+    applyI18n()
+  } catch (error) {
+    console.error('Failed to update language:', error)
+  }
+})
+
 refreshInterval.addEventListener('change', async () => {
   const seconds = parseInt(refreshInterval.value, 10)
   try {
@@ -129,12 +143,12 @@ validateBtn.addEventListener('click', async () => {
     if (result.success) {
       await loadConnectionStatus()
     } else {
-      authError.textContent = result.error || 'Authentication failed.'
+      authError.textContent = result.error || t('error.authFailed')
       authError.style.display = 'inline'
     }
   } catch (error) {
     console.error('Failed to submit auth code:', error)
-    authError.textContent = 'An unexpected error occurred.'
+    authError.textContent = t('error.unexpected')
     authError.style.display = 'inline'
   } finally {
     validateBtn.disabled = false
@@ -184,37 +198,37 @@ function updateUpdateUI(state: { status: string; version?: string; progress?: nu
 
   switch (state.status) {
     case 'checking':
-      updateText.textContent = 'Checking for updates...'
+      updateText.textContent = t('settings.checkUpdatesHint')
       checkUpdateBtn.disabled = true
       updateProgress.style.display = 'block'
       updateProgress.classList.add('indeterminate')
       break
     case 'available':
-      updateText.textContent = `Version ${state.version} available`
+      updateText.textContent = t('settings.versionAvailable', { version: state.version ?? '' })
       checkUpdateBtn.style.display = 'none'
       installUpdateBtn.style.display = 'inline-block'
-      installUpdateBtn.textContent = 'Download & Install'
+      installUpdateBtn.textContent = t('settings.downloadInstall')
       break
     case 'not-available':
-      updateText.textContent = 'You are up to date'
+      updateText.textContent = t('settings.upToDate')
       break
     case 'downloading':
-      updateText.textContent = `Downloading... ${state.progress ?? 0}%`
+      updateText.textContent = t('settings.downloading', { progress: state.progress ?? 0 })
       checkUpdateBtn.style.display = 'none'
       updateProgress.style.display = 'block'
       updateProgressBar.style.width = `${state.progress ?? 0}%`
       break
     case 'downloaded':
-      updateText.textContent = `Version ${state.version} ready to install`
+      updateText.textContent = t('settings.versionReady', { version: state.version ?? '' })
       checkUpdateBtn.style.display = 'none'
       installUpdateBtn.style.display = 'inline-block'
-      installUpdateBtn.textContent = 'Install & Restart'
+      installUpdateBtn.textContent = t('settings.installRestart')
       break
     case 'error':
-      updateText.textContent = state.error || 'Update check failed'
+      updateText.textContent = state.error || t('settings.updateFailed')
       break
     default:
-      updateText.textContent = 'Click to check for updates'
+      updateText.textContent = t('settings.checkUpdatesHint')
   }
 }
 
@@ -233,7 +247,6 @@ installUpdateBtn.addEventListener('click', async () => {
   try {
     const state = await window.claudeBar.getUpdateStatus()
     if (state.status === 'available') {
-      // Need to download first
       await window.claudeBar.downloadUpdate()
     } else if (state.status === 'downloaded') {
       await window.claudeBar.installUpdate()
@@ -253,7 +266,7 @@ window.claudeBar.onUpdateStatusChanged((state) => {
 async function loadUpdateInfo(): Promise<void> {
   try {
     const version = await window.claudeBar.getAppVersion()
-    appVersion.textContent = `Claude Bar v${version}`
+    appVersion.textContent = t('settings.version', { version })
 
     const state = await window.claudeBar.getUpdateStatus()
     updateUpdateUI(state)
@@ -262,7 +275,17 @@ async function loadUpdateInfo(): Promise<void> {
   }
 }
 
-// Initial load
-loadConnectionStatus()
-loadSettings()
-loadUpdateInfo()
+// Initialize locale then load
+async function init(): Promise<void> {
+  const settings = await window.claudeBar.getSettings()
+  setLocale(settings.language as Locale)
+  applyI18n()
+  language.value = settings.language
+  refreshInterval.value = settings.refreshInterval.toString()
+  enableNotifications.checked = settings.enableNotifications
+  launchAtLogin.checked = settings.launchAtLogin
+  loadConnectionStatus()
+  loadUpdateInfo()
+}
+
+init()

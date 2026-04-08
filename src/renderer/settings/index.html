@@ -10,84 +10,96 @@
     <div class="settings-container">
       <!-- Title bar drag region -->
       <div class="title-bar">
-        <h1>Settings</h1>
+        <h1 data-i18n="settings.title">Settings</h1>
       </div>
 
       <!-- Connection status -->
       <div class="section">
-        <h2>Connection</h2>
+        <h2 data-i18n="settings.connection">Connection</h2>
         <!-- Connected state -->
         <div class="connection-status" id="connectionStatus">
           <div class="status-indicator connected" id="statusIndicator"></div>
           <div class="status-info">
-            <span class="status-text" id="statusText">Connected</span>
+            <span class="status-text" id="statusText" data-i18n="settings.connected">Connected</span>
             <span class="status-detail">
               <span class="status-email" id="statusEmail">--</span>
             </span>
           </div>
-          <button class="logout-btn" id="logoutBtn" style="display: none;">Log Out</button>
+          <button class="logout-btn" id="logoutBtn" style="display: none;" data-i18n="settings.logout">Log Out</button>
         </div>
         <!-- Not connected state -->
         <div class="not-connected-help" id="notConnectedHelp" style="display: none;">
-          <button class="login-btn" id="loginBtn">Log In with Claude</button>
+          <button class="login-btn" id="loginBtn" data-i18n="settings.loginWithClaude">Log In with Claude</button>
         </div>
         <!-- Waiting for code state -->
         <div class="auth-code-section" id="authCodeSection" style="display: none;">
-          <p class="auth-code-hint">Authenticate in your browser, then paste the code below:</p>
+          <p class="auth-code-hint" data-i18n="settings.authHint">Authenticate in your browser, then paste the code below:</p>
           <div class="auth-code-input-row">
-            <input type="text" id="authCodeInput" class="auth-code-input" placeholder="Paste authorization code here" spellcheck="false" autocomplete="off" />
-            <button class="validate-btn" id="validateBtn">Validate</button>
+            <input type="text" id="authCodeInput" class="auth-code-input" data-i18n-placeholder="settings.authPlaceholder" placeholder="Paste authorization code here" spellcheck="false" autocomplete="off" />
+            <button class="validate-btn" id="validateBtn" data-i18n="settings.validate">Validate</button>
           </div>
           <div class="auth-code-actions">
-            <button class="cancel-btn" id="cancelLoginBtn">Cancel</button>
+            <button class="cancel-btn" id="cancelLoginBtn" data-i18n="settings.cancel">Cancel</button>
             <span class="auth-error" id="authError" style="display: none;"></span>
           </div>
         </div>
       </div>
 
+      <!-- Language -->
+      <div class="section">
+        <h2 data-i18n="settings.language">Language</h2>
+        <div class="setting-row">
+          <label for="language" data-i18n="settings.languageLabel">Display language</label>
+          <select id="language">
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+          </select>
+        </div>
+      </div>
+
       <!-- Refresh interval -->
       <div class="section">
-        <h2>Refresh Interval</h2>
+        <h2 data-i18n="settings.refreshInterval">Refresh Interval</h2>
         <div class="setting-row">
-          <label for="refreshInterval">Update quota every</label>
+          <label for="refreshInterval" data-i18n="settings.updateEvery">Update quota every</label>
           <select id="refreshInterval">
-            <option value="300" selected>5 minutes</option>
-            <option value="600">10 minutes</option>
-            <option value="900">15 minutes</option>
+            <option value="300" selected data-i18n="settings.5min">5 minutes</option>
+            <option value="600" data-i18n="settings.10min">10 minutes</option>
+            <option value="900" data-i18n="settings.15min">15 minutes</option>
           </select>
         </div>
       </div>
 
       <!-- Notifications -->
       <div class="section">
-        <h2>Notifications</h2>
+        <h2 data-i18n="settings.notifications">Notifications</h2>
         <div class="setting-row">
           <label for="enableNotifications">
             <input type="checkbox" id="enableNotifications" checked />
-            Alert when quota crosses warning (70%) or critical (90%)
+            <span data-i18n="settings.notificationsDesc">Alert when quota crosses warning (70%) or critical (90%)</span>
           </label>
         </div>
       </div>
 
       <!-- Startup -->
       <div class="section">
-        <h2>Startup</h2>
+        <h2 data-i18n="settings.startup">Startup</h2>
         <div class="setting-row">
           <label for="launchAtLogin">
             <input type="checkbox" id="launchAtLogin" />
-            Launch Claude Bar at login
+            <span data-i18n="settings.launchAtLogin">Launch Claude Bar at login</span>
           </label>
         </div>
       </div>
 
       <!-- Updates -->
       <div class="section">
-        <h2>Updates</h2>
+        <h2 data-i18n="settings.updates">Updates</h2>
         <div class="update-status" id="updateStatus">
-          <span class="update-text" id="updateText">Click to check for updates</span>
+          <span class="update-text" id="updateText" data-i18n="settings.checkUpdatesHint">Click to check for updates</span>
           <div class="update-actions">
-            <button class="check-btn" id="checkUpdateBtn">Check for Updates</button>
-            <button class="update-btn" id="installUpdateBtn" style="display: none;">Install & Restart</button>
+            <button class="check-btn" id="checkUpdateBtn" data-i18n="settings.checkUpdates">Check for Updates</button>
+            <button class="update-btn" id="installUpdateBtn" style="display: none;" data-i18n="settings.installRestart">Install & Restart</button>
           </div>
         </div>
         <div class="update-progress" id="updateProgress" style="display: none;">
@@ -98,7 +110,7 @@
       <!-- About -->
       <div class="section about">
         <p class="version" id="appVersion"></p>
-        <p class="credits">Monitor your Claude Code quotas from the menu bar</p>
+        <p class="credits" data-i18n="settings.about">Monitor your Claude Code quotas from the menu bar</p>
       </div>
     </div>
     <script type="module" src="./renderer.ts"></script>
