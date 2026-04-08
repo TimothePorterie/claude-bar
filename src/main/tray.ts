@@ -187,7 +187,7 @@ export class TrayManager {
       {
         label: 'Refresh',
         click: () => {
-          schedulerService.refresh()
+          schedulerService.refresh(true)
         }
       },
       { type: 'separator' },

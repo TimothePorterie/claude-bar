@@ -6,7 +6,6 @@ import { schedulerService } from './services/scheduler'
 import { updaterService } from './services/updater'
 import { logger } from './services/logger'
 import { windowManager } from './windows'
-import { trayManager } from './tray'
 import { settingsStore as store } from './services/settings-store'
 
 // Input validation helpers
@@ -40,11 +39,8 @@ export function setupIpcHandlers(): void {
   // Force refresh quota (bypass min-interval)
   ipcMain.handle('refresh-quota', async (): Promise<QuotaInfo | null> => {
     try {
-      const quota = await quotaService.fetchQuota(true)
-      trayManager.updateTitle()
-      trayManager.updateIcon()
-      trayManager.updateTooltip()
-      return quota
+      await schedulerService.refresh(true)
+      return quotaService.getCachedQuota()
     } catch (error) {
       logger.error('IPC refresh-quota error:', error)
       return null

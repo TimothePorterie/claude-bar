@@ -63,9 +63,9 @@ export class SchedulerService {
     this.consecutiveErrors = 0
   }
 
-  async refresh(): Promise<void> {
+  async refresh(force = false): Promise<void> {
     try {
-      const quota = await quotaService.fetchQuota()
+      const quota = await quotaService.fetchQuota(force)
 
       // Check if we got rate limited (429) or proactively throttled (0 remaining)
       const cooldownMs = quotaService.getRateLimitRemainingMs()
