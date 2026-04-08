@@ -265,10 +265,11 @@ function showToast(message: string, variant: 'info' | 'success' = 'success'): vo
   if (toastTimer) clearTimeout(toastTimer)
   toast.textContent = message
   toast.className = `toast ${variant} show`
+  reportContentHeight()
   toastTimer = setTimeout(() => {
     toast.classList.remove('show')
+    reportContentHeight()
   }, 2000)
-  reportContentHeight()
 }
 
 async function refreshQuota(): Promise<void> {
