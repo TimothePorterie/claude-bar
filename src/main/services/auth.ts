@@ -137,6 +137,14 @@ export class AuthService {
       state = undefined
     }
 
+    // CSRF protection: verify state matches what we sent
+    if (state && state !== this.stateParam) {
+      logger.error('OAuth state mismatch — possible CSRF attack')
+      this.codeVerifier = null
+      this.stateParam = null
+      return { success: false, error: t('auth.invalidCode') }
+    }
+
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 30000)
@@ -395,15 +403,14 @@ export class AuthService {
 
   private encryptToken(token: string): string {
     if (!safeStorage.isEncryptionAvailable()) {
-      logger.warn('safeStorage encryption not available, using base64 fallback')
-      return Buffer.from(token).toString('base64')
+      throw new Error('safeStorage encryption not available — cannot store tokens securely')
     }
     return safeStorage.encryptString(token).toString('base64')
   }
 
   private decryptToken(encrypted: string): string {
     if (!safeStorage.isEncryptionAvailable()) {
-      return Buffer.from(encrypted, 'base64').toString('utf-8')
+      throw new Error('safeStorage encryption not available — cannot decrypt tokens')
     }
     return safeStorage.decryptString(Buffer.from(encrypted, 'base64'))
   }

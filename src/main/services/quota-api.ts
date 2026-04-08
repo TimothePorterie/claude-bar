@@ -407,7 +407,7 @@ export class QuotaService {
 
         const retryAfter = response.headers.get('retry-after')
         const serverSec = retryAfter ? parseInt(retryAfter, 10) || 0 : 0
-        const cooldownSec = Math.max(serverSec, MIN_429_COOLDOWN_SEC)
+        const cooldownSec = Math.max(Math.min(serverSec, 3600), MIN_429_COOLDOWN_SEC)
         this.rateLimitedUntil = Date.now() + cooldownSec * 1000
         settingsStore.set('rateLimitedUntil', this.rateLimitedUntil)
         this.applyRateLimitHeaders(response)
