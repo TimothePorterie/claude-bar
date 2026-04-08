@@ -14,6 +14,7 @@ const validateBtn = document.getElementById('validateBtn') as HTMLButtonElement
 const cancelLoginBtn = document.getElementById('cancelLoginBtn') as HTMLButtonElement
 const authError = document.getElementById('authError') as HTMLElement
 const refreshInterval = document.getElementById('refreshInterval') as HTMLSelectElement
+const enableNotifications = document.getElementById('enableNotifications') as HTMLInputElement
 const launchAtLogin = document.getElementById('launchAtLogin') as HTMLInputElement
 
 function showConnectedUI(email: string): void {
@@ -68,6 +69,7 @@ async function loadSettings(): Promise<void> {
   try {
     const settings = await window.claudeBar.getSettings()
     refreshInterval.value = settings.refreshInterval.toString()
+    enableNotifications.checked = settings.enableNotifications
     launchAtLogin.checked = settings.launchAtLogin
   } catch (error) {
     console.error('Failed to load settings:', error)
@@ -81,6 +83,14 @@ refreshInterval.addEventListener('change', async () => {
     await window.claudeBar.setRefreshInterval(seconds)
   } catch (error) {
     console.error('Failed to update refresh interval:', error)
+  }
+})
+
+enableNotifications.addEventListener('change', async () => {
+  try {
+    await window.claudeBar.setEnableNotifications(enableNotifications.checked)
+  } catch (error) {
+    console.error('Failed to update notifications setting:', error)
   }
 })
 

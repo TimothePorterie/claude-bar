@@ -1,0 +1,62 @@
+import { Notification } from 'electron'
+import { quotaService, QuotaInfo } from './quota-api'
+import { settingsStore } from './settings-store'
+import { logger } from './logger'
+
+type QuotaLevel = 'normal' | 'warning' | 'critical'
+
+const LEVEL_PRIORITY: Record<QuotaLevel, number> = { normal: 0, warning: 1, critical: 2 }
+
+function getLevel(utilization: number): QuotaLevel {
+  if (utilization >= 90) return 'critical'
+  if (utilization >= 70) return 'warning'
+  return 'normal'
+}
+
+export class NotificationService {
+  private previousLevels: Map<string, QuotaLevel> = new Map()
+
+  checkAndNotify(): void {
+    if (!settingsStore.get('enableNotifications')) return
+
+    const quota = quotaService.getCachedQuota()
+    if (!quota) return
+
+    this.checkPeriod('Session (5h)', quota.fiveHour.utilization)
+    this.checkPeriod('Weekly (7d)', quota.sevenDay.utilization)
+    if (quota.sevenDayOpus) {
+      this.checkPeriod('Opus (7d)', quota.sevenDayOpus.utilization)
+    }
+  }
+
+  private checkPeriod(label: string, utilization: number): void {
+    const newLevel = getLevel(utilization)
+    const previousLevel = this.previousLevels.get(label) ?? 'normal'
+
+    this.previousLevels.set(label, newLevel)
+
+    // Only notify when crossing upward into warning or critical
+    if (LEVEL_PRIORITY[newLevel] <= LEVEL_PRIORITY[previousLevel]) return
+
+    const pct = Math.round(utilization)
+    if (newLevel === 'critical') {
+      this.send(`${label} at ${pct}%`, 'Quota almost exhausted. Consider slowing down.')
+    } else {
+      this.send(`${label} at ${pct}%`, 'Quota usage is getting high.')
+    }
+  }
+
+  private send(title: string, body: string): void {
+    if (!Notification.isSupported()) return
+
+    const notification = new Notification({ title: `Claude Bar — ${title}`, body })
+    notification.show()
+    logger.info(`Notification: ${title}`)
+  }
+
+  reset(): void {
+    this.previousLevels.clear()
+  }
+}
+
+export const notificationService = new NotificationService()

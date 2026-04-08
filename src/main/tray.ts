@@ -6,6 +6,7 @@ import { updaterService } from './services/updater'
 import { logger } from './services/logger'
 import { windowManager } from './windows'
 import { settingsStore } from './services/settings-store'
+import { notificationService } from './services/notifications'
 
 type DisplayMode = 'standard' | 'detailed' | 'compact' | 'minimal' | 'time-remaining'
 
@@ -58,6 +59,7 @@ export class TrayManager {
       this.updateTitle()
       this.updateIcon()
       this.updateTooltip()
+      notificationService.checkAndNotify()
       // Send updated quota to popup window
       const quota = quotaService.getCachedQuota()
       if (quota) {

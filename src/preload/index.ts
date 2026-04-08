@@ -35,6 +35,7 @@ export interface Settings {
   refreshInterval: number
   launchAtLogin: boolean
   authMode: 'app' | 'cli'
+  enableNotifications: boolean
 }
 
 export interface UserInfo {
@@ -73,6 +74,8 @@ const api = {
     ipcRenderer.invoke('set-launch-at-login', enabled),
   setAuthMode: (mode: 'app' | 'cli'): Promise<boolean> =>
     ipcRenderer.invoke('set-auth-mode', mode),
+  setEnableNotifications: (enabled: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('set-enable-notifications', enabled),
 
   // Auth
   startLogin: (): Promise<boolean> => ipcRenderer.invoke('auth-start-login'),

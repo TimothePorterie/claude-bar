@@ -92,14 +92,16 @@ export function setupIpcHandlers(): void {
       return {
         refreshInterval: store.get('refreshInterval'),
         launchAtLogin: store.get('launchAtLogin'),
-        authMode: store.get('authMode')
+        authMode: store.get('authMode'),
+        enableNotifications: store.get('enableNotifications')
       }
     } catch (error) {
       logger.error('IPC get-settings error:', error)
       return {
         refreshInterval: 300,
         launchAtLogin: false,
-        authMode: 'app'
+        authMode: 'app',
+        enableNotifications: true
       }
     }
   })
@@ -154,6 +156,22 @@ export function setupIpcHandlers(): void {
       return true
     } catch (error) {
       logger.error('IPC set-auth-mode error:', error)
+      return false
+    }
+  })
+
+  ipcMain.handle('set-enable-notifications', (_event, enabled: unknown) => {
+    if (!isValidBoolean(enabled)) {
+      logger.warn(`Invalid enable-notifications value rejected: ${enabled}`)
+      return false
+    }
+
+    try {
+      store.set('enableNotifications', enabled)
+      logger.info(`Notifications: ${enabled}`)
+      return true
+    } catch (error) {
+      logger.error('IPC set-enable-notifications error:', error)
       return false
     }
   })

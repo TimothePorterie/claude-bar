@@ -11,6 +11,7 @@ interface SettingsStoreSchema {
   refreshInterval: number
   launchAtLogin: boolean
   authMode: 'app' | 'cli'
+  enableNotifications: boolean
   rateLimitedUntil: number
   lastQuotaData: PersistedQuotaData | null
   displayMode: string
@@ -23,6 +24,7 @@ export const settingsStore = new Store<SettingsStoreSchema>({
     refreshInterval: 300,
     launchAtLogin: false,
     authMode: 'app' as const,
+    enableNotifications: true,
     rateLimitedUntil: 0,
     lastQuotaData: null,
     displayMode: 'standard'
