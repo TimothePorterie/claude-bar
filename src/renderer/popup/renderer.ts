@@ -1,5 +1,6 @@
 // Popup renderer script
-import { t, setLocale, applyI18n, Locale } from '../../shared/i18n'
+import type { Locale } from '../../shared/i18n'
+import { t, setLocale, applyI18n } from '../../shared/i18n'
 
 type QuotaErrorType = 'network' | 'auth' | 'rate_limit' | 'server' | 'unknown'
 

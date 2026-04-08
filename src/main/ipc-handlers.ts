@@ -7,7 +7,8 @@ import { updaterService } from './services/updater'
 import { logger } from './services/logger'
 import { windowManager } from './windows'
 import { settingsStore as store } from './services/settings-store'
-import { setLocale, t, Locale } from '../shared/i18n'
+import type { Locale } from '../shared/i18n'
+import { setLocale, t } from '../shared/i18n'
 
 // Input validation helpers
 const VALID_REFRESH_INTERVALS = [300, 600, 900] as const

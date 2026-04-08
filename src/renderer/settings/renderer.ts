@@ -1,5 +1,6 @@
 // Settings renderer script
-import { t, setLocale, applyI18n, Locale } from '../../shared/i18n'
+import type { Locale } from '../../shared/i18n'
+import { t, setLocale, applyI18n } from '../../shared/i18n'
 
 // DOM elements
 const connectionStatus = document.getElementById('connectionStatus') as HTMLElement
