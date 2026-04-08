@@ -569,17 +569,6 @@ export class QuotaService {
     return result
   }
 
-  getFormattedTitle(): string {
-    if (!this.cachedQuota) {
-      return '-- / --'
-    }
-
-    const fiveHour = Math.round(this.cachedQuota.fiveHour.utilization)
-    const sevenDay = Math.round(this.cachedQuota.sevenDay.utilization)
-
-    return `${fiveHour}% / ${sevenDay}%`
-  }
-
   getQuotaLevel(): 'normal' | 'warning' | 'critical' {
     if (!this.cachedQuota) {
       return 'normal'

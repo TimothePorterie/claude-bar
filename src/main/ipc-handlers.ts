@@ -130,10 +130,7 @@ export function setupIpcHandlers(): void {
     try {
       store.set('launchAtLogin', enabled)
       if (app.isPackaged) {
-        app.setLoginItemSettings({
-          openAtLogin: enabled,
-          openAsHidden: true
-        })
+        app.setLoginItemSettings({ openAtLogin: enabled })
       } else {
         logger.debug('Skipping setLoginItemSettings in development mode')
       }
@@ -293,10 +290,7 @@ export function loadSettings(): void {
 
     const launchAtLogin = store.get('launchAtLogin')
     if (isValidBoolean(launchAtLogin) && app.isPackaged) {
-      app.setLoginItemSettings({
-        openAtLogin: launchAtLogin,
-        openAsHidden: true
-      })
+      app.setLoginItemSettings({ openAtLogin: launchAtLogin })
     }
 
     logger.info('Settings loaded')
