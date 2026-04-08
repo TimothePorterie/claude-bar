@@ -1,37 +1,7 @@
 // Popup renderer script
 import type { Locale } from '../../shared/i18n'
 import { t, setLocale, applyI18n } from '../../shared/i18n'
-
-type QuotaErrorType = 'network' | 'auth' | 'rate_limit' | 'server' | 'unknown'
-
-interface QuotaError {
-  type: QuotaErrorType
-  message: string
-  retryable: boolean
-}
-
-interface QuotaPeriod {
-  utilization: number
-  resetsAt: Date
-  resetsIn: string
-  resetProgress: number
-}
-
-interface ExtraUsageInfo {
-  isEnabled: boolean
-  usedCredits: number
-  monthlyLimit: number
-  currency: string
-}
-
-interface QuotaInfo {
-  fiveHour: QuotaPeriod
-  sevenDay: QuotaPeriod
-  sevenDayOpus?: QuotaPeriod
-  extraUsage?: ExtraUsageInfo
-  lastUpdated: Date
-  error?: QuotaError
-}
+import type { QuotaError, QuotaInfo } from '../../shared/types'
 
 // DOM elements
 const header = document.getElementById('header') as HTMLElement

@@ -3,6 +3,8 @@ import { authService } from './auth'
 import { logger } from './logger'
 import { settingsStore, PersistedQuotaData } from './settings-store'
 import { t } from '../../shared/i18n'
+export type { QuotaErrorType, QuotaError, QuotaPeriod, ExtraUsageInfo, QuotaInfo } from '../../shared/types'
+import type { QuotaError, QuotaPeriod, QuotaInfo, ExtraUsageInfo } from '../../shared/types'
 
 export interface QuotaData {
   utilization: number
@@ -21,37 +23,6 @@ export interface UsageResponse {
   seven_day: QuotaData
   seven_day_opus?: QuotaData
   extra_usage?: ExtraUsageData
-}
-
-export type QuotaErrorType = 'network' | 'auth' | 'rate_limit' | 'server' | 'unknown'
-
-export interface QuotaError {
-  type: QuotaErrorType
-  message: string
-  retryable: boolean
-}
-
-export interface QuotaPeriod {
-  utilization: number
-  resetsAt: Date
-  resetsIn: string
-  resetProgress: number
-}
-
-export interface ExtraUsageInfo {
-  isEnabled: boolean
-  usedCredits: number
-  monthlyLimit: number
-  currency: string
-}
-
-export interface QuotaInfo {
-  fiveHour: QuotaPeriod
-  sevenDay: QuotaPeriod
-  sevenDayOpus?: QuotaPeriod
-  extraUsage?: ExtraUsageInfo
-  lastUpdated: Date
-  error?: QuotaError
 }
 
 const WARNING_THRESHOLD = 70

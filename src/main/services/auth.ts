@@ -50,8 +50,18 @@ export class AuthService {
   private state: AuthState = 'unauthenticated'
   private codeVerifier: string | null = null
   private stateParam: string | null = null
+  private loginTimeoutId: ReturnType<typeof setTimeout> | null = null
   private refreshPromise: Promise<boolean> | null = null
   private stateCallbacks: StateChangeCallback[] = []
+
+  private clearLoginState(): void {
+    this.codeVerifier = null
+    this.stateParam = null
+    if (this.loginTimeoutId) {
+      clearTimeout(this.loginTimeoutId)
+      this.loginTimeoutId = null
+    }
+  }
 
   initialize(): void {
     this.store = new Store<AuthStoreSchema>({
@@ -105,12 +115,20 @@ export class AuthService {
       const authUrl = `${AuthService.AUTH_URL}?${params.toString()}`
       await shell.openExternal(authUrl)
 
+      // Auto-clear login state after 10 minutes if flow not completed
+      if (this.loginTimeoutId) clearTimeout(this.loginTimeoutId)
+      this.loginTimeoutId = setTimeout(() => {
+        if (this.codeVerifier) {
+          logger.info('OAuth login flow timed out after 10 minutes, clearing state')
+          this.clearLoginState()
+        }
+      }, 10 * 60 * 1000)
+
       logger.info('OAuth login started, browser opened')
       return true
     } catch (error) {
       logger.error('Failed to start login:', error instanceof Error ? error.message : String(error))
-      this.codeVerifier = null
-      this.stateParam = null
+      this.clearLoginState()
       return false
     }
   }
@@ -140,8 +158,7 @@ export class AuthService {
     // CSRF protection: verify state matches what we sent
     if (state && state !== this.stateParam) {
       logger.error('OAuth state mismatch — possible CSRF attack')
-      this.codeVerifier = null
-      this.stateParam = null
+      this.clearLoginState()
       return { success: false, error: t('auth.invalidCode') }
     }
 
@@ -176,8 +193,7 @@ export class AuthService {
       if (!response.ok) {
         const errorText = await response.text()
         logger.error(`Token exchange failed: ${response.status} - ${errorText}`)
-        this.codeVerifier = null
-        this.stateParam = null
+        this.clearLoginState()
         return { success: false, error: t('auth.authFailed', { status: response.status }) }
       }
 
@@ -186,8 +202,7 @@ export class AuthService {
 
       if (!data.access_token || !data.refresh_token) {
         logger.error('Token exchange returned incomplete data')
-        this.codeVerifier = null
-        this.stateParam = null
+        this.clearLoginState()
         return { success: false, error: t('auth.incompleteToken') }
       }
 
@@ -197,15 +212,13 @@ export class AuthService {
       // Extract user info from token response
       this.extractUserInfoFromResponse(rawData)
 
-      this.codeVerifier = null
-      this.stateParam = null
+      this.clearLoginState()
       this.setState('authenticated')
 
       logger.info(`OAuth login successful, token: ${redactToken(data.access_token)}`)
       return { success: true }
     } catch (error) {
-      this.codeVerifier = null
-      this.stateParam = null
+      this.clearLoginState()
 
       if (error instanceof Error && error.name === 'AbortError') {
         logger.error('Token exchange timed out')
@@ -343,8 +356,7 @@ export class AuthService {
 
     this.store.set('tokens', null)
     this.store.set('userInfo', null)
-    this.codeVerifier = null
-    this.stateParam = null
+    this.clearLoginState()
     this.setState('unauthenticated')
 
     logger.info('User logged out from auth service')

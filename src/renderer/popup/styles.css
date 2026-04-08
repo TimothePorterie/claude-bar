@@ -450,75 +450,6 @@ body {
   color: #555;
 }
 
-/* Time to critical warning */
-.time-to-critical {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: 8px;
-  margin-top: 12px;
-}
-
-.ttc-icon {
-  font-size: 14px;
-}
-
-.ttc-text {
-  font-size: 12px;
-  font-weight: 500;
-  color: #dc2626;
-}
-
-/* History section */
-.history-section {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.history-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.history-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #555;
-}
-
-.history-stats {
-  display: flex;
-  justify-content: space-around;
-  gap: 8px;
-}
-
-.stat {
-  text-align: center;
-  flex: 1;
-  padding: 8px;
-  background: rgba(0, 0, 0, 0.02);
-  border-radius: 6px;
-}
-
-.stat-label {
-  display: block;
-  font-size: 10px;
-  color: #888;
-  margin-bottom: 2px;
-}
-
-.stat-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
-}
-
 /* Footer */
 .footer {
   margin-top: 16px;
@@ -675,35 +606,6 @@ body {
 
   .reset-progress-fill {
     background: linear-gradient(90deg, #64748b 0%, #475569 100%);
-  }
-
-  .time-to-critical {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.3);
-  }
-
-  .ttc-text {
-    color: #f87171;
-  }
-
-  .history-section {
-    border-top-color: rgba(255, 255, 255, 0.08);
-  }
-
-  .history-title {
-    color: #aaa;
-  }
-
-  .stat {
-    background: rgba(255, 255, 255, 0.03);
-  }
-
-  .stat-label {
-    color: #777;
-  }
-
-  .stat-value {
-    color: #e5e5e5;
   }
 
   .footer {
