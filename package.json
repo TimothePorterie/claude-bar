@@ -17,14 +17,14 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "electron-log": "^5.4.0",
+    "electron-log": "^5.4.4",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.8.3"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
     "@vitest/coverage-v8": "^4.1.0",
-    "electron": "^40.8.0",
+    "electron": "^42.1.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "tar": "^7.5.11",
