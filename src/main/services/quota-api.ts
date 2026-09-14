@@ -55,7 +55,6 @@ export class QuotaService {
   private rateLimitedUntil: number
   private rateLimitRemaining: number | null = null
   private pendingFetch: Promise<QuotaInfo | null> | null = null
-  private tokenRotatedForRateLimit: boolean = false
 
   constructor() {
     // Restore persisted rate limit, but clear if already expired
@@ -148,26 +147,23 @@ export class QuotaService {
       }
       return null
     }
-    // Cooldown expired — allow token rotation on next 429
-    this.tokenRotatedForRateLimit = false
     return this.doApiFetch()
   }
 
   /**
    * Resolve credentials based on the configured authMode.
    * - 'app': uses in-app OAuth tokens (authService)
-   * - 'cli': uses CLI Keychain tokens (keychainService)
+   * - 'cli': reads Claude Code's Keychain tokens (never refreshed here)
+   * Sets lastError when returning null.
    */
   private async getCredentials(): Promise<Credentials | null> {
-    const authMode = settingsStore.get('authMode')
-
-    if (authMode === 'app') {
+    if (settingsStore.get('authMode') === 'app') {
       const accessToken = await authService.getValidAccessToken()
       if (!accessToken) {
         logger.error('No credentials available from in-app auth')
+        this.lastError = { type: 'auth', message: t('error.noCredentials'), retryable: false }
         return null
       }
-      // Wrap as Credentials for uniform API surface
       const userInfo = authService.getUserInfo()
       return {
         accessToken,
@@ -177,48 +173,43 @@ export class QuotaService {
       }
     }
 
-    // CLI keychain mode
-    const credentials = await keychainService.getValidCredentials()
-    if (!credentials || !credentials.accessToken) {
+    const credentials = await keychainService.getCredentials()
+    if (!credentials) {
       logger.error('No credentials available in Keychain')
+      this.lastError = { type: 'auth', message: t('error.noCredentials'), retryable: false }
+      return null
+    }
+    if (keychainService.isTokenExpired(credentials)) {
+      logger.warn('CLI token expired — waiting for Claude Code to refresh it')
+      this.lastError = { type: 'auth', message: t('error.cliTokenExpired'), retryable: true }
       return null
     }
     return credentials
   }
 
   /**
-   * Refresh credentials after a 401 error.
-   * Routes to the correct auth source based on authMode.
+   * Get fresh credentials after a 401.
+   * - 'app': refresh in-app tokens
+   * - 'cli': re-read the Keychain in case Claude Code rotated the token
    */
   private async refreshCredentials(current: Credentials): Promise<Credentials | null> {
-    const authMode = settingsStore.get('authMode')
-
-    if (authMode === 'app') {
-      const refreshed = await authService.refreshTokens()
-      if (!refreshed) return null
-      const accessToken = await authService.getValidAccessToken()
-      if (!accessToken) return null
-      const userInfo = authService.getUserInfo()
-      return {
-        accessToken,
-        emailAddress: userInfo?.email,
-        displayName: userInfo?.name,
-        subscriptionType: userInfo?.subscriptionType
-      }
+    if (settingsStore.get('authMode') === 'app') {
+      if (!(await authService.refreshTokens())) return null
+      return this.getCredentials()
     }
 
-    // CLI keychain mode
-    return await keychainService.refreshToken(current)
+    const latest = await keychainService.getCredentials()
+    if (!latest || latest.accessToken === current.accessToken || keychainService.isTokenExpired(latest)) {
+      return null
+    }
+    return latest
   }
 
   private async doApiFetch(): Promise<QuotaInfo | null> {
     try {
       const credentials = await this.getCredentials()
 
-      if (!credentials) {
-        this.lastError = { type: 'auth', message: t('error.noCredentials'), retryable: false }
-        return null
-      }
+      if (!credentials) return null
 
       const response = await this.fetchOnce(credentials)
       if (!response) {
@@ -279,7 +270,6 @@ export class QuotaService {
 
       this.lastFetchTime = Date.now()
       this.lastError = null
-      this.tokenRotatedForRateLimit = false
       // Only clear rate limit cooldown if we still have budget remaining
       if (this.rateLimitRemaining === null || this.rateLimitRemaining > 0) {
         this.rateLimitedUntil = 0
@@ -357,28 +347,12 @@ export class QuotaService {
             return response
           }
         }
-        this.lastError = { type: 'auth', message: t('error.sessionExpired'), retryable: false }
+        const cli = settingsStore.get('authMode') === 'cli'
+        this.lastError = { type: 'auth', message: t(cli ? 'error.cliTokenExpired' : 'error.sessionExpired'), retryable: cli }
         return null
       }
 
-      // Handle rate limiting — try token rotation first (fresh token = fresh budget)
       if (response.status === 429) {
-        if (!this.tokenRotatedForRateLimit) {
-          logger.info('Rate limited (429) — attempting token rotation for fresh budget')
-          const refreshed = await this.refreshCredentials(credentials)
-          if (refreshed) {
-            this.tokenRotatedForRateLimit = true
-            const retryResponse = await doRequest(refreshed)
-            if (retryResponse.ok) {
-              logger.info('Token rotation successful — fresh budget obtained')
-              this.applyRateLimitHeaders(retryResponse)
-              return retryResponse
-            }
-            // Retry also 429'd — fall through to cooldown
-            logger.warn('Token rotation did not resolve rate limit')
-          }
-        }
-
         const retryAfter = response.headers.get('retry-after')
         const serverSec = retryAfter ? parseInt(retryAfter, 10) || 0 : 0
         const cooldownSec = Math.max(Math.min(serverSec, 3600), MIN_429_COOLDOWN_SEC)

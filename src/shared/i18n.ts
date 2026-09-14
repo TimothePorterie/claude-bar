@@ -100,6 +100,7 @@ const en: Record<string, string> = {
   'error.serverGuidance': 'Anthropic servers are having issues.',
   'error.authFailed': 'Authentication failed.',
   'error.invalidCodeFormat': 'Invalid code format.',
+  'error.cliTokenExpired': 'Claude Code token expired. Run `claude` to refresh it.',
 
   // Auth
   'auth.noLoginInProgress': 'No login in progress. Please click "Log In" first.',
@@ -213,6 +214,7 @@ const fr: Record<string, string> = {
   'error.serverGuidance': 'Les serveurs Anthropic rencontrent des probl\u00e8mes.',
   'error.authFailed': '\u00c9chec de l\u2019authentification.',
   'error.invalidCodeFormat': 'Format de code invalide.',
+  'error.cliTokenExpired': 'Jeton Claude Code expir\u00e9. Lancez `claude` pour le rafra\u00eechir.',
 
   // Auth
   'auth.noLoginInProgress': 'Aucune connexion en cours. Cliquez d\u2019abord sur \u00ab\u00a0Se connecter\u00a0\u00bb.',

@@ -14,13 +14,6 @@ export interface Credentials {
   subscriptionType?: string
 }
 
-interface TokenRefreshResponse {
-  access_token: string
-  refresh_token: string
-  expires_in: number
-  token_type: string
-}
-
 // Validate that a string looks like a valid OAuth token (alphanumeric + common token chars)
 function isValidToken(token: string): boolean {
   if (!token || typeof token !== 'string') return false
@@ -64,10 +57,6 @@ function safeJsonParse(jsonStr: string): Record<string, unknown> | null {
 
 export class KeychainService {
   private static readonly SERVICE_NAME = 'Claude Code-credentials'
-  private static readonly TOKEN_REFRESH_URL = 'https://api.anthropic.com/api/oauth/token'
-  private static readonly CLIENT_ID = 'claude-code'
-  private refreshPromise: Promise<Credentials | null> | null = null
-  private cachedCredentials: Credentials | null = null
 
   async getCredentials(): Promise<Credentials | null> {
     try {
@@ -109,7 +98,7 @@ export class KeychainService {
         logger.warn('Invalid refresh token format in Keychain')
       }
 
-      this.cachedCredentials = {
+      const credentials: Credentials = {
         accessToken,
         refreshToken: refreshToken && isValidToken(refreshToken) ? refreshToken : undefined,
         expiresAt: typeof oauth.expiresAt === 'number' ? oauth.expiresAt : undefined,
@@ -123,7 +112,7 @@ export class KeychainService {
       }
 
       logger.debug(`Credentials loaded: token=${redactToken(accessToken)}`)
-      return this.cachedCredentials
+      return credentials
     } catch (error) {
       // Keychain item not found or access denied - this is expected for new users
       const errMsg = error instanceof Error ? error.message : String(error)
@@ -147,188 +136,10 @@ export class KeychainService {
     }
   }
 
+  // Read-only: Claude Code owns this Keychain item and rotates its tokens itself.
+  // Refreshing here would invalidate the CLI's refresh token.
   isTokenExpired(credentials: Credentials): boolean {
-    if (!credentials.expiresAt || typeof credentials.expiresAt !== 'number') {
-      return false // Assume not expired if no expiration time
-    }
-    // Add 5 minute buffer before actual expiration
-    return Date.now() > credentials.expiresAt - 5 * 60 * 1000
-  }
-
-  async getValidCredentials(): Promise<Credentials | null> {
-    const credentials = await this.getCredentials()
-    if (!credentials) return null
-
-    // Check if token needs refresh
-    if (this.isTokenExpired(credentials)) {
-      logger.info('Access token expired, attempting refresh...')
-      const refreshed = await this.refreshToken(credentials)
-      if (refreshed) {
-        return refreshed
-      }
-      logger.warn('Token refresh failed, using existing token')
-    }
-
-    return credentials
-  }
-
-  async refreshToken(credentials: Credentials): Promise<Credentials | null> {
-    if (!credentials.refreshToken) {
-      logger.warn('No refresh token available')
-      return null
-    }
-
-    if (!isValidToken(credentials.refreshToken)) {
-      logger.error('Invalid refresh token format')
-      return null
-    }
-
-    // If a refresh is already in progress, all callers await the same promise
-    if (this.refreshPromise) {
-      logger.debug('Token refresh already in progress, awaiting existing promise')
-      return this.refreshPromise
-    }
-
-    this.refreshPromise = this.doRefreshToken(credentials)
-    try {
-      return await this.refreshPromise
-    } finally {
-      this.refreshPromise = null
-    }
-  }
-
-  private async doRefreshToken(credentials: Credentials): Promise<Credentials | null> {
-    try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
-
-      const response = await fetch(KeychainService.TOKEN_REFRESH_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: credentials.refreshToken!,
-          client_id: KeychainService.CLIENT_ID
-        }),
-        signal: controller.signal
-      })
-
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        logger.error(`Token refresh failed: ${response.status}`)
-        return null
-      }
-
-      let data: TokenRefreshResponse
-      try {
-        data = (await response.json()) as TokenRefreshResponse
-      } catch {
-        logger.error('Invalid JSON response from token refresh')
-        return null
-      }
-
-      // Validate response tokens
-      if (!isValidToken(data.access_token)) {
-        logger.error('Invalid access token in refresh response')
-        return null
-      }
-
-      if (!isValidToken(data.refresh_token)) {
-        logger.error('Invalid refresh token in refresh response')
-        return null
-      }
-
-      if (typeof data.expires_in !== 'number' || data.expires_in <= 0) {
-        logger.error('Invalid expires_in in refresh response')
-        return null
-      }
-
-      // Update credentials with new tokens
-      const newCredentials: Credentials = {
-        ...credentials,
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        expiresAt: Date.now() + data.expires_in * 1000
-      }
-
-      // Update keychain with new credentials
-      await this.updateKeychainCredentials(newCredentials)
-
-      this.cachedCredentials = newCredentials
-      logger.info('Token refreshed successfully')
-
-      return newCredentials
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        logger.error('Token refresh timed out')
-      } else {
-        logger.error('Token refresh error:', error instanceof Error ? error.message : 'Unknown error')
-      }
-      // Don't notify on network errors — they are transient and will retry on next scheduler tick
-      return null
-    }
-  }
-
-  private async updateKeychainCredentials(credentials: Credentials): Promise<boolean> {
-    try {
-      // Read existing keychain data
-      const { stdout } = await execFileAsync('security', [
-        'find-generic-password',
-        '-s',
-        KeychainService.SERVICE_NAME,
-        '-w'
-      ])
-
-      const data = safeJsonParse(stdout.trim())
-      if (!data) {
-        logger.error('Invalid or unsafe JSON in existing Keychain data')
-        return false
-      }
-
-      // Update the oauth section
-      const existingOauth = (data.claudeAiOauth as Record<string, unknown>) || {}
-      data.claudeAiOauth = {
-        ...existingOauth,
-        accessToken: credentials.accessToken,
-        refreshToken: credentials.refreshToken,
-        expiresAt: credentials.expiresAt
-      }
-
-      // Write back to keychain using execFile with proper argument passing
-      const jsonStr = JSON.stringify(data)
-
-      // Delete existing entry first
-      try {
-        await execFileAsync('security', [
-          'delete-generic-password',
-          '-s',
-          KeychainService.SERVICE_NAME
-        ])
-      } catch {
-        // Entry might not exist, that's ok
-      }
-
-      // Add new entry - pass the JSON as the -w argument directly
-      await execFileAsync('security', [
-        'add-generic-password',
-        '-s',
-        KeychainService.SERVICE_NAME,
-        '-a',
-        KeychainService.SERVICE_NAME,
-        '-w',
-        jsonStr
-      ])
-
-      logger.info('Keychain credentials updated')
-      return true
-    } catch (error) {
-      logger.error('Failed to update keychain credentials:', error instanceof Error ? error.message : 'Unknown error')
-      return false
-    }
+    return typeof credentials.expiresAt === 'number' && Date.now() > credentials.expiresAt
   }
 }
 
