@@ -260,7 +260,7 @@ npm run test:coverage # Run tests with coverage report
 ## CI
 
 - `.github/workflows/ci.yml`: typecheck, tests and build on every PR and push to `main` (Ubuntu, no Electron binary)
-- `.github/workflows/release.yml`: on `v*` tag, signed + notarized build published to GitHub Releases (macOS runner)
+- `.github/workflows/release.yml`: on `v*` tag, signed + notarized build published to GitHub Releases (macOS runner). The release is pre-created as a draft and published after upload: letting electron-builder create it produced duplicate releases (parallel uploads)
 - Actions are pinned by commit SHA
 - `electron-builder` must stay >= 26.16.1: older versions pass the wrong password to `security set-key-partition-list` and break CSC_LINK signing on macOS 26 runners
 

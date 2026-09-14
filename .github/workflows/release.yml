@@ -36,7 +36,14 @@ jobs:
           # Decode API Key from base64 to file
           echo "$APPLE_API_KEY_BASE64" | base64 --decode > /tmp/AuthKey.p8
           export APPLE_API_KEY=/tmp/AuthKey.p8
+
+          # Pre-create a draft release: electron-builder uploads artifacts in parallel and,
+          # when no release exists yet, several uploads each create their own duplicate.
+          # Idempotent so a job re-run reuses the draft.
+          VERSION=$(node -p "require('./package.json').version")
+          gh release view "v$VERSION" >/dev/null 2>&1 || gh release create "v$VERSION" --draft --title "$VERSION" --notes ""
           npm run release
+          gh release edit "v$VERSION" --draft=false --latest
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
