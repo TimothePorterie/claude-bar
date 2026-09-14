@@ -152,9 +152,16 @@ export class WindowManager {
     // Block navigation to external URLs
     app.on('web-contents-created', (_event, contents) => {
       contents.on('will-navigate', (event, navigationUrl) => {
-        const parsedUrl = new URL(navigationUrl)
-        // Only allow navigation to local files or dev server
-        if (parsedUrl.protocol !== 'file:' && !navigationUrl.startsWith('http://localhost')) {
+        // Only allow navigation to local files, or the exact dev server origin in development
+        const devUrl = process.env.ELECTRON_RENDERER_URL
+        let allowed = false
+        try {
+          const parsedUrl = new URL(navigationUrl)
+          allowed = parsedUrl.protocol === 'file:' || (!app.isPackaged && !!devUrl && parsedUrl.origin === new URL(devUrl).origin)
+        } catch {
+          allowed = false
+        }
+        if (!allowed) {
           logger.warn(`Blocked navigation to: ${navigationUrl}`)
           event.preventDefault()
         }
