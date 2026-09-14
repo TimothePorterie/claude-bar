@@ -52,6 +52,7 @@ export class AuthService {
   private stateParam: string | null = null
   private loginTimeoutId: ReturnType<typeof setTimeout> | null = null
   private refreshPromise: Promise<boolean> | null = null
+  private logoutGeneration = 0
   private stateCallbacks: StateChangeCallback[] = []
 
   private clearLoginState(): void {
@@ -254,6 +255,8 @@ export class AuthService {
   }
 
   private async doRefreshTokens(encryptedRefreshToken: string): Promise<boolean> {
+    const generation = this.logoutGeneration
+    const previousState = this.state
     this.setState('refreshing')
 
     try {
@@ -284,6 +287,9 @@ export class AuthService {
 
       clearTimeout(timeoutId)
 
+      // User logged out while the request was in flight — don't resurrect the session
+      if (generation !== this.logoutGeneration) return false
+
       if (!response.ok) {
         const errorText = await response.text()
         logger.error(`Auth token refresh failed: ${response.status} - ${errorText}`)
@@ -300,6 +306,8 @@ export class AuthService {
         return false
       }
 
+      if (generation !== this.logoutGeneration) return false
+
       this.storeTokens(data)
       this.extractUserInfoFromResponse(rawData)
       this.setState('authenticated')
@@ -312,7 +320,8 @@ export class AuthService {
       } else {
         logger.error('Auth token refresh error:', error instanceof Error ? error.message : String(error))
       }
-      this.setState('expired')
+      // Network failure says nothing about the refresh token's validity — keep prior state
+      if (generation === this.logoutGeneration) this.setState(previousState)
       return false
     }
   }
@@ -354,6 +363,7 @@ export class AuthService {
   logout(): void {
     if (!this.store) return
 
+    this.logoutGeneration++
     this.store.set('tokens', null)
     this.store.set('userInfo', null)
     this.clearLoginState()
