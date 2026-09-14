@@ -94,7 +94,7 @@ export class TrayManager {
     const quota = quotaService.getCachedQuota()
     if (!quota) {
       if (hasError) {
-        this.tray.setTitle(lastError.type === 'auth' ? '\u26a0 Login' : '\u26a0 Error')
+        this.tray.setTitle(`\u26a0 ${t(lastError.type === 'auth' ? 'tray.login' : 'tray.error')}`)
       } else {
         this.tray.setTitle('-- / --')
       }

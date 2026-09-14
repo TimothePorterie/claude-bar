@@ -1,6 +1,7 @@
 import { autoUpdater, UpdateInfo } from 'electron-updater'
 import { BrowserWindow, app } from 'electron'
 import { logger } from './logger'
+import { t } from '../../shared/i18n'
 
 export type UpdateStatus =
   | 'idle'
@@ -82,7 +83,7 @@ class UpdaterService {
       await autoUpdater.checkForUpdates()
     } catch (error) {
       logger.error('Failed to check for updates:', error instanceof Error ? error.message : String(error))
-      this.setState({ status: 'error', error: 'Failed to check for updates' })
+      this.setState({ status: 'error', error: t('settings.updateFailed') })
     }
   }
 
@@ -93,7 +94,7 @@ class UpdaterService {
       await autoUpdater.downloadUpdate()
     } catch (error) {
       logger.error('Failed to download update:', error instanceof Error ? error.message : String(error))
-      this.setState({ status: 'error', error: 'Failed to download update' })
+      this.setState({ status: 'error', error: t('settings.downloadFailed') })
     }
   }
 

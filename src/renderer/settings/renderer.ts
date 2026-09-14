@@ -62,7 +62,7 @@ async function loadConnectionStatus(): Promise<void> {
 
     if (hasCredentials) {
       const userInfo = await window.claudeBar.getUserInfo()
-      const email = userInfo?.email || userInfo?.name || 'Authenticated'
+      const email = userInfo?.email || userInfo?.name || t('settings.connected')
       showConnectedUI(email)
     } else {
       showNotConnectedUI()

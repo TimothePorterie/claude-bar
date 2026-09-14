@@ -113,7 +113,7 @@ function updateQuotaDisplay(quota: QuotaInfo): void {
       const limit = formatCredits(quota.extraUsage.monthlyLimit, quota.extraUsage.currency)
       extraUsageValue.textContent = `${used} / ${limit}`
     } else {
-      extraUsageValue.textContent = `${used} (no limit)`
+      extraUsageValue.textContent = `${used} ${t('popup.noLimit')}`
     }
     extraUsageEl.style.display = 'flex'
   } else {

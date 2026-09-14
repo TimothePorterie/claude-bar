@@ -252,7 +252,7 @@ export class QuotaService {
       const rawData = await response.json()
       if (!isValidUsageResponse(rawData)) {
         logger.error('Invalid API response shape:', JSON.stringify(rawData).slice(0, 200))
-        this.lastError = { type: 'server', message: 'Unexpected API response format.', retryable: true }
+        this.lastError = { type: 'server', message: t('error.unexpectedResponse'), retryable: true }
         if (this.cachedQuota) return { ...this.cachedQuota, error: this.lastError }
         return null
       }
