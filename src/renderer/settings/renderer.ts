@@ -16,6 +16,7 @@ const validateBtn = document.getElementById('validateBtn') as HTMLButtonElement
 const cancelLoginBtn = document.getElementById('cancelLoginBtn') as HTMLButtonElement
 const authError = document.getElementById('authError') as HTMLElement
 const language = document.getElementById('language') as HTMLSelectElement
+const authMode = document.getElementById('authMode') as HTMLSelectElement
 const refreshInterval = document.getElementById('refreshInterval') as HTMLSelectElement
 const enableNotifications = document.getElementById('enableNotifications') as HTMLInputElement
 const launchAtLogin = document.getElementById('launchAtLogin') as HTMLInputElement
@@ -25,7 +26,8 @@ function showConnectedUI(email: string): void {
   statusIndicator.classList.add('connected')
   statusText.textContent = t('settings.connected')
   statusEmail.textContent = email
-  logoutBtn.style.display = 'block'
+  // CLI credentials belong to Claude Code — logout happens there
+  logoutBtn.style.display = authMode.value === 'app' ? 'block' : 'none'
   notConnectedHelp.style.display = 'none'
   authCodeSection.style.display = 'none'
 }
@@ -34,11 +36,16 @@ function showNotConnectedUI(): void {
   connectionStatus.style.display = 'flex'
   statusIndicator.classList.remove('connected')
   statusText.textContent = t('settings.notConnected')
-  statusEmail.textContent = t('settings.noCredentials')
   logoutBtn.style.display = 'none'
   authCodeSection.style.display = 'none'
-  notConnectedHelp.style.display = 'block'
-  loginBtn.style.display = 'inline-block'
+  if (authMode.value === 'cli') {
+    statusEmail.textContent = t('settings.cliHint')
+    notConnectedHelp.style.display = 'none'
+  } else {
+    statusEmail.textContent = t('settings.noCredentials')
+    notConnectedHelp.style.display = 'block'
+    loginBtn.style.display = 'inline-block'
+  }
 }
 
 function showWaitingForCodeUI(): void {
@@ -89,6 +96,15 @@ language.addEventListener('change', async () => {
     applyI18n()
   } catch (error) {
     console.error('Failed to update language:', error)
+  }
+})
+
+authMode.addEventListener('change', async () => {
+  try {
+    await window.claudeBar.setAuthMode(authMode.value as 'app' | 'cli')
+    await loadConnectionStatus()
+  } catch (error) {
+    console.error('Failed to update auth mode:', error)
   }
 })
 
@@ -282,6 +298,7 @@ async function init(): Promise<void> {
   setLocale(settings.language as Locale)
   applyI18n()
   language.value = settings.language
+  authMode.value = settings.authMode
   refreshInterval.value = settings.refreshInterval.toString()
   enableNotifications.checked = settings.enableNotifications
   launchAtLogin.checked = settings.launchAtLogin

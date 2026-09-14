@@ -55,6 +55,10 @@ const en: Record<string, string> = {
   'settings.version': 'Claude Bar v{version}',
   'settings.error': 'Error',
   'settings.credentialsError': 'Could not check credentials',
+  'settings.authMode': 'Authentication method',
+  'settings.authModeApp': 'Claude Bar (OAuth)',
+  'settings.authModeCli': 'Claude Code (Keychain)',
+  'settings.cliHint': 'Run `claude` in a terminal to log in',
 
   // Tray
   'tray.refresh': 'Refresh',
@@ -169,6 +173,10 @@ const fr: Record<string, string> = {
   'settings.version': 'Claude Bar v{version}',
   'settings.error': 'Erreur',
   'settings.credentialsError': 'Impossible de v\u00e9rifier les identifiants',
+  'settings.authMode': 'M\u00e9thode d\u2019authentification',
+  'settings.authModeApp': 'Claude Bar (OAuth)',
+  'settings.authModeCli': 'Claude Code (Trousseau)',
+  'settings.cliHint': 'Lancez `claude` dans un terminal pour vous connecter',
 
   // Tray
   'tray.refresh': 'Actualiser',

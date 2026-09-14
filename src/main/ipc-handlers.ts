@@ -61,7 +61,7 @@ export function setupIpcHandlers(): void {
   // Check if credentials exist
   ipcMain.handle('has-credentials', async (): Promise<boolean> => {
     try {
-      return authService.hasTokens() || await keychainService.hasCredentials()
+      return store.get('authMode') === 'app' ? authService.hasTokens() : await keychainService.hasCredentials()
     } catch (error) {
       logger.error('IPC has-credentials error:', error)
       return false
@@ -73,7 +73,8 @@ export function setupIpcHandlers(): void {
     'get-user-info',
     async (): Promise<{ email?: string; name?: string; subscriptionType?: string } | null> => {
       try {
-        if (authService.hasTokens()) {
+        if (store.get('authMode') === 'app') {
+          if (!authService.hasTokens()) return null
           const authUserInfo = authService.getUserInfo()
           return {
             email: authUserInfo?.email,
@@ -164,7 +165,11 @@ export function setupIpcHandlers(): void {
     }
 
     try {
-      store.set('authMode', mode)
+      if (store.get('authMode') !== mode) {
+        store.set('authMode', mode)
+        quotaService.clear()
+        void schedulerService.refresh(true)
+      }
       logger.info(`Auth mode set to '${mode}'`)
       return true
     } catch (error) {
@@ -233,7 +238,12 @@ export function setupIpcHandlers(): void {
         return { success: false, error: t('error.invalidCodeFormat') }
       }
       try {
-        return await authService.submitCode(code)
+        const result = await authService.submitCode(code)
+        if (result.success && store.get('authMode') === 'app') {
+          quotaService.clear()
+          void schedulerService.refresh(true)
+        }
+        return result
       } catch (error) {
         logger.error('IPC auth-submit-code error:', error)
         return { success: false, error: t('error.unexpected') }
@@ -244,6 +254,10 @@ export function setupIpcHandlers(): void {
   ipcMain.handle('auth-logout', (): boolean => {
     try {
       authService.logout()
+      if (store.get('authMode') === 'app') {
+        quotaService.clear()
+        void schedulerService.refresh(true)
+      }
       return true
     } catch (error) {
       logger.error('IPC auth-logout error:', error)

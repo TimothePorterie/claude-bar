@@ -16,6 +16,13 @@
       <!-- Connection status -->
       <div class="section">
         <h2 data-i18n="settings.connection">Connection</h2>
+        <div class="setting-row" style="margin-bottom: 12px;">
+          <label for="authMode" data-i18n="settings.authMode">Authentication method</label>
+          <select id="authMode">
+            <option value="app" data-i18n="settings.authModeApp">Claude Bar (OAuth)</option>
+            <option value="cli" data-i18n="settings.authModeCli">Claude Code (Keychain)</option>
+          </select>
+        </div>
         <!-- Connected state -->
         <div class="connection-status" id="connectionStatus">
           <div class="status-indicator connected" id="statusIndicator"></div>

@@ -508,6 +508,14 @@ export class QuotaService {
     return Math.round(progress)
   }
 
+  // Forget quota data from the previous account/auth source
+  clear(): void {
+    this.cachedQuota = null
+    this.lastFetchTime = 0
+    this.lastError = null
+    settingsStore.set('lastQuotaData', null)
+  }
+
   getCachedQuota(): QuotaInfo | null {
     if (!this.cachedQuota) return null
     // Recalculate time-dependent fields on every read
