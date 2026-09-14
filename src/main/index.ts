@@ -64,9 +64,8 @@ if (!gotTheLock) {
     logger.info('Claude Bar started successfully')
   })
 
-  app.on('window-all-closed', (e: Event) => {
-    e.preventDefault()
-  })
+  // Registering the listener keeps the menu bar app alive when windows close
+  app.on('window-all-closed', () => {})
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
