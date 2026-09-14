@@ -90,53 +90,50 @@ export class TrayManager {
     if (!this.tray) return
 
     const lastError = quotaService.getLastError()
-    if (!quotaService.getCachedQuota() && lastError && lastError.type !== 'rate_limit') {
-      if (lastError.type === 'auth') {
-        this.tray.setTitle('\u26a0 Login')
-      } else {
-        this.tray.setTitle('\u26a0 Error')
-      }
-      return
-    }
-
+    const hasError = !!lastError && lastError.type !== 'rate_limit'
     const quota = quotaService.getCachedQuota()
     if (!quota) {
-      this.tray.setTitle('-- / --')
+      if (hasError) {
+        this.tray.setTitle(lastError.type === 'auth' ? '\u26a0 Login' : '\u26a0 Error')
+      } else {
+        this.tray.setTitle('-- / --')
+      }
       return
     }
 
     const fiveHour = Math.round(quota.fiveHour.utilization)
     const sevenDay = Math.round(quota.sevenDay.utilization)
     const opus = quota.sevenDayOpus ? Math.round(quota.sevenDayOpus.utilization) : null
-    const mode = this.getDisplayMode()
+    let title: string
 
-    switch (mode) {
+    switch (this.getDisplayMode()) {
       case 'detailed':
-        if (opus !== null) {
-          this.tray.setTitle(t('tray.detailedOpusFmt', { five: fiveHour, seven: sevenDay, opus }))
-        } else {
-          this.tray.setTitle(t('tray.detailedFmt', { five: fiveHour, seven: sevenDay }))
-        }
+        title = opus !== null
+          ? t('tray.detailedOpusFmt', { five: fiveHour, seven: sevenDay, opus })
+          : t('tray.detailedFmt', { five: fiveHour, seven: sevenDay })
         break
       case 'compact':
-        this.tray.setTitle(`${fiveHour}%`)
+        title = `${fiveHour}%`
         break
       case 'minimal':
-        this.tray.setTitle('')
+        title = ''
         break
       case 'time-remaining':
-        this.tray.setTitle(quota.fiveHour.resetsIn)
+        title = quota.fiveHour.resetsIn
         break
       default: // standard
-        this.tray.setTitle(`${fiveHour}% / ${sevenDay}%`)
+        title = `${fiveHour}% / ${sevenDay}%`
     }
+
+    // Stale data: flag it so an expired session doesn't hide behind old numbers
+    this.tray.setTitle(hasError ? `\u26a0 ${title}`.trim() : title)
   }
 
   updateIcon(): void {
     if (!this.tray) return
 
     const lastError = quotaService.getLastError()
-    if (!quotaService.getCachedQuota() && lastError && lastError.type !== 'rate_limit') {
+    if (lastError && lastError.type !== 'rate_limit') {
       const iconPath = this.getIconPath('warning')
       const icon = nativeImage.createFromPath(iconPath)
       this.tray.setImage(icon)
@@ -178,6 +175,9 @@ export class TrayManager {
       lines.push(t('tray.opus', { pct: Math.round(quota.sevenDayOpus.utilization), resets: quota.sevenDayOpus.resetsIn }))
     }
     lines.push(t('tray.updated', { time: quota.lastUpdated.toLocaleTimeString() }))
+    if (quota.error && quota.error.type !== 'rate_limit') {
+      lines.push(quota.error.message)
+    }
     this.tray.setToolTip(lines.join('\n'))
   }
 

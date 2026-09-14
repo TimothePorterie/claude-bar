@@ -513,6 +513,7 @@ export class QuotaService {
     // Recalculate time-dependent fields on every read
     const result: QuotaInfo = {
       ...this.cachedQuota,
+      error: this.getLastError() ?? undefined,
       fiveHour: {
         ...this.cachedQuota.fiveHour,
         resetsIn: this.formatTimeUntil(this.cachedQuota.fiveHour.resetsAt),

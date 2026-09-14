@@ -50,6 +50,9 @@ function getProgressClass(utilization: number): string {
 
 function showError(error: QuotaError): void {
   errorMessage.textContent = error.message
+  errorGuidance.textContent = ''
+  errorLoginBtn.style.display = error.type === 'auth' ? 'inline-block' : 'none'
+  errorSection.classList.remove('standalone')
   errorSection.style.display = 'flex'
 
   if (error.retryable) {
@@ -291,7 +294,6 @@ async function refreshQuota(): Promise<void> {
     } else if (result.quota) {
       showConnectedState()
       updateQuotaDisplay(result.quota)
-      hideError()
     }
   } catch (error) {
     console.error('Failed to refresh quota:', error)
