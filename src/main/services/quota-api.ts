@@ -27,7 +27,7 @@ export interface UsageResponse {
 
 const WARNING_THRESHOLD = 70
 const CRITICAL_THRESHOLD = 90
-const MIN_FETCH_INTERVAL_MS = 300000 // 5min minimum between scheduled API calls
+const MIN_FETCH_INTERVAL_MS = 290000 // ~5min between scheduled calls; slack absorbs request latency vs setInterval ticks
 const MIN_FORCE_INTERVAL_MS = 15000 // 15s absolute minimum even for manual refresh
 const MIN_429_COOLDOWN_SEC = 120 // OAuth /usage returns retry-after: 0 which is misleading — use 2min floor
 
