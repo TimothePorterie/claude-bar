@@ -7,7 +7,7 @@ This document provides technical context for AI assistants and developers workin
 **Claude Bar** is a macOS menu bar application built with Electron that monitors Claude Code quotas in real-time. It displays session (5-hour) and weekly (7-day) quota usage directly from the menu bar.
 
 - **Platform**: macOS 10.13+
-- **Framework**: Electron 40 + electron-vite 5.0
+- **Framework**: Electron 42 + electron-vite 5.0
 - **Language**: TypeScript 5.3
 - **License**: MIT
 
@@ -15,19 +15,23 @@ This document provides technical context for AI assistants and developers workin
 
 ```
 Main Process (Electron)
-├── index.ts              # App entry point, single instance lock
+├── index.ts              # App entry point, single instance lock, wake-from-sleep restart
 ├── tray.ts               # Menu bar icon and context menu
-├── windows.ts            # Popup and settings window management
+├── windows.ts            # Popup/settings windows, toggle + auto-hide, security hooks
 ├── ipc-handlers.ts       # IPC communication with renderer
 └── services/
     ├── auth.ts           # In-app OAuth login (PKCE), token storage, refresh
-    ├── keychain.ts       # macOS Keychain credential access + token refresh
-    ├── quota-api.ts      # Anthropic API integration with retry logic + auth routing
+    ├── keychain.ts       # READ-ONLY access to Claude Code's Keychain credentials
+    ├── quota-api.ts      # Anthropic API integration, auth routing, cache, throttling
     ├── settings-store.ts # Shared settings store (electron-store singleton)
-    ├── scheduler.ts      # Auto-refresh timer
+    ├── scheduler.ts      # Auto-refresh timer with error backoff
+    ├── notifications.ts  # System notifications on threshold crossings
     ├── updater.ts        # Auto-update via electron-updater + GitHub Releases
-    ├── logger.ts         # Persistent logging with electron-log
-    └── cli-probe.ts      # Alternative CLI-based quota probe (unused)
+    └── logger.ts         # Persistent logging with electron-log
+
+Shared
+├── types.ts              # QuotaInfo / QuotaError types shared main <-> renderer
+└── i18n.ts               # en/fr strings, t(), applyI18n()
 
 Preload
 └── index.ts              # Secure IPC bridge (contextBridge)
@@ -43,8 +47,9 @@ Renderer
     └── styles.css
 
 Tests
-└── tests/                # Vitest unit tests
-    └── quota-api.test.ts
+└── tests/                # Vitest unit tests (import real modules, mock electron/Keychain/store)
+    ├── quota-api.test.ts
+    └── notifications.test.ts
 ```
 
 ## Key Files
@@ -53,10 +58,11 @@ Tests
 |------|---------|
 | `src/main/index.ts` | App lifecycle, single instance lock, dock hiding |
 | `src/main/tray.ts` | Menu bar icon, title updates, context menu, display modes |
-| `src/main/windows.ts` | Popup and settings windows, auto-fit content height |
+| `src/main/windows.ts` | Popup and settings windows, auto-fit height, toggle, auto-hide on Space/display change, CSP + navigation guard |
 | `src/main/services/auth.ts` | In-app OAuth login (PKCE flow), encrypted token storage, refresh |
-| `src/main/services/keychain.ts` | CLI OAuth token access + automatic refresh |
-| `src/main/services/quota-api.ts` | API calls with retry logic, auth source routing based on `authMode` |
+| `src/main/services/keychain.ts` | Reads Claude Code's Keychain credentials (never refreshes or writes) |
+| `src/main/services/quota-api.ts` | API calls, auth source routing based on `authMode`, cached quota + last error |
+| `src/main/services/notifications.ts` | Threshold notifications, levels persisted in `notifiedLevels` |
 | `src/main/services/settings-store.ts` | Shared electron-store singleton, avoids circular deps |
 | `src/main/services/scheduler.ts` | Periodic refresh timer with rate limit cooldown |
 | `src/main/services/updater.ts` | Auto-update via electron-updater, download progress, install & restart |
@@ -67,7 +73,9 @@ Tests
 
 ### Core Features
 - In-app OAuth login (PKCE flow) — no CLI required
-- Auth mode selection: `authMode` setting routes quota fetching to in-app OAuth or CLI Keychain
+- Auth mode selection in Settings: `authMode` routes quota fetching, credential status and user info to in-app OAuth or CLI Keychain
+- System notifications when a quota crosses warning/critical (once per level, persisted across restarts)
+- English / French UI
 - Real-time quota monitoring (5-hour session + 7-day weekly)
 - Menu bar icon with color-coded status (green/orange/red)
 - Configurable auto-refresh (5min, 10min, 15min)
@@ -90,17 +98,19 @@ Tests
 ### Token Management
 - Two token sources: in-app (encrypted via safeStorage) and CLI Keychain
 - User selects auth mode in Settings (no automatic fallback between sources)
-- Automatic OAuth token refresh when expired
-- Graceful handling on refresh failure
-- Login/Logout UI in popup and settings windows
+- In-app mode: automatic OAuth token refresh when expired
+- **CLI mode is read-only.** Claude Code owns the `Claude Code-credentials` Keychain item and rotates its tokens. Never refresh or write it from Claude Bar: refreshing rotates the CLI's refresh token and logs Claude Code out. An expired CLI token is reported as an auth error asking the user to run `claude`; on 401 the Keychain is re-read in case Claude Code rotated the token
+- Login/Logout UI in popup and settings windows (logout hidden in CLI mode)
+- Login, logout and auth mode change clear the cached quota and trigger a refresh
 
 ### Error Handling
-- Single retry with token refresh on 401 errors
-- Rate limit (429) handling with token rotation and cooldown
+- Single retry on 401 (in-app: token refresh; CLI: Keychain re-read)
+- Rate limit (429): cooldown from `retry-after` (2 min floor, 1 h cap), persisted across restarts. No token rotation
 - Proactive throttling based on rate limit headers
-- Detailed logging for debugging
-- Contextual error UI with retry button and error-specific messages
-- Error indicators in menu bar title and icon on failures
+- `getCachedQuota()` carries the last error, so stale data is flagged (`⚠` prefix in the menu bar, warning icon, tooltip line, popup banner)
+- Scheduler: exponential backoff on retryable errors; retry timers cleared on success and on wake from sleep
+- Throttle: scheduled fetches need ~5 min since the last success (290 s, slack for request latency); manual refresh 15 s
+- `five_hour.resets_at` can be `null` when no session window is active: displayed as `—`
 - Error types: network, auth, rate_limit, server, unknown
 
 ### Auto-Updates
@@ -120,7 +130,6 @@ Hover over menu bar icon to see:
 
 The following features are planned but not yet present in the codebase:
 
-- **Notifications service** (`notifications.ts`) — system notifications on threshold crossings
 - **History service** (`history.ts`) — usage history tracking, charts, statistics
 - **Trend indicators** — usage direction arrows (↑↓→) in display
 - **Adaptive refresh** — automatic interval adjustment based on quota level
@@ -199,7 +208,9 @@ Credentials stored under `Claude Code-credentials`:
 | `get-settings` | renderer -> main | Load all settings |
 | `set-refresh-interval` | renderer -> main | Update refresh rate |
 | `set-launch-at-login` | renderer -> main | Update startup setting |
-| `set-auth-mode` | renderer -> main | Set auth mode ('app' or 'cli') |
+| `set-auth-mode` | renderer -> main | Set auth mode ('app' or 'cli'), clears cache and refreshes |
+| `set-enable-notifications` | renderer -> main | Toggle threshold notifications |
+| `set-language` | renderer -> main | Set UI language ('en' or 'fr'), recreates the popup |
 | `get-last-error` | renderer -> main | Get last quota error |
 | `auth-start-login` | renderer -> main | Start OAuth login (opens browser) |
 | `auth-submit-code` | renderer -> main | Submit authorization code |
@@ -222,11 +233,14 @@ Credentials stored under `Claude Code-credentials`:
 ```typescript
 {
   refreshInterval: number       // seconds (300, 600, 900), default: 300
-  launchAtLogin: boolean        // default: false
-  authMode: 'app' | 'cli'     // default: 'app'
+  launchAtLogin: boolean        // default: false, synced from system Login Items at startup
+  authMode: 'app' | 'cli'       // default: 'app'
+  enableNotifications: boolean  // default: true
+  language: 'en' | 'fr'         // default: 'en'
   displayMode: 'standard' | 'detailed' | 'compact' | 'minimal' | 'time-remaining' // default: 'standard'
   rateLimitedUntil: number      // timestamp, internal use
   lastQuotaData: object | null  // persisted quota, internal use
+  notifiedLevels: object        // last notified level per quota, internal use
 }
 ```
 
@@ -237,10 +251,18 @@ npm run dev          # Development mode with hot reload
 npm run build        # Build for production
 npm run dist         # Create DMG (arm64 + x64)
 npm run release      # Build + publish to GitHub (DMGs + latest-mac.yml + blockmaps)
+npm run typecheck    # tsc on app sources and electron.vite.config.ts
 npm run test         # Run Vitest tests
 npm run test:watch   # Run tests in watch mode
 npm run test:coverage # Run tests with coverage report
 ```
+
+## CI
+
+- `.github/workflows/ci.yml`: typecheck, tests and build on every PR and push to `main` (Ubuntu, no Electron binary)
+- `.github/workflows/release.yml`: on `v*` tag, signed + notarized build published to GitHub Releases (macOS runner)
+- Actions are pinned by commit SHA
+- `electron-builder` must stay >= 26.16.1: older versions pass the wrong password to `security set-key-partition-list` and break CSC_LINK signing on macOS 26 runners
 
 ## Build Output
 
@@ -250,13 +272,16 @@ npm run test:coverage # Run tests with coverage report
 
 ## Security Model
 
+- **Electron fuses** (`electron-builder.json`): RunAsNode, NODE_OPTIONS and `--inspect` disabled; embedded asar integrity validation, only-load-from-asar and cookie encryption enabled
+- **Entitlements**: only `allow-jit` and `network.client`
 - **Context Isolation**: Enabled (renderer cannot access Node.js)
 - **Node Integration**: Disabled in renderer
 - **Preload Bridge**: All IPC via `contextBridge.exposeInMainWorld`
 - **PKCE OAuth**: Authorization code flow with S256 code challenge
 - **Encrypted Storage**: In-app tokens encrypted via macOS `safeStorage`
-- **Keychain**: Read/write access for CLI token refresh
-- **CSP**: connect-src allows `api.anthropic.com` and `console.anthropic.com` only
+- **Keychain**: Read-only access to Claude Code's credentials
+- **CSP**: `<meta>` tag in each renderer HTML (the `onHeadersReceived` header does not apply to `loadFile` pages); connect-src allows `api.anthropic.com` and `console.anthropic.com` only
+- **Navigation**: `will-navigate` only allows `file:` and, in development, the exact dev server origin
 
 ## File Locations
 
@@ -274,17 +299,15 @@ npm run test:coverage # Run tests with coverage report
 - `electron-updater` - Auto-update functionality
 
 **Dev:**
-- `electron` ^40.4.1 - Desktop framework
-- `electron-vite` ^5.0.0 - Build tooling
-- `electron-builder` ^26.7.0 - DMG packaging
+- `electron` ^42 - Desktop framework
+- `electron-vite` ^5.0.0 - Build tooling (supports vite 5–7 only: vite 8 requires electron-vite 6)
+- `electron-builder` ^26.16.1 - DMG packaging
 - `typescript` ^5.3.0 - Type safety
-- `vite` ^7.3.1 - Frontend bundler
-- `vitest` ^4.0.0 - Unit testing framework
+- `vite` ^7 - Frontend bundler
+- `vitest` ^4 - Unit testing framework
+
+Local installs: npm's `allowScripts` blocks Electron's postinstall, so `node_modules/electron/dist` may be missing after `npm ci`. Run `npm install-scripts approve electron` once.
 
 ## Known Issues
 
-- `cli-probe.ts` is dead code (defined but never imported)
-- `openAsHidden` in `setLoginItemSettings()` is deprecated since Electron 29
-- Tests re-implement utility functions locally instead of importing from source
-- `console.error` used in `scheduler.ts` instead of project logger
-- CSS includes styles for unimplemented features (history, trends, update progress)
+- CSS includes styles for unimplemented trend indicators (`.trend-indicator`)
