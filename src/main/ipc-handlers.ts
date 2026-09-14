@@ -351,9 +351,9 @@ export function loadSettings(): void {
       logger.info(`Migrated invalid refresh interval ${refreshInterval}s → 300s`)
     }
 
-    const launchAtLogin = store.get('launchAtLogin')
-    if (isValidBoolean(launchAtLogin) && app.isPackaged) {
-      app.setLoginItemSettings({ openAtLogin: launchAtLogin })
+    // The system Login Items list is the source of truth (the user can change it in System Settings)
+    if (app.isPackaged) {
+      store.set('launchAtLogin', app.getLoginItemSettings().openAtLogin)
     }
 
     const language = store.get('language')
