@@ -31,17 +31,45 @@ const MIN_FETCH_INTERVAL_MS = 290000 // ~5min between scheduled calls; slack abs
 const MIN_FORCE_INTERVAL_MS = 15000 // 15s absolute minimum even for manual refresh
 const MIN_429_COOLDOWN_SEC = 120 // OAuth /usage returns retry-after: 0 which is misleading — use 2min floor
 
-function isValidUsageResponse(data: unknown): data is UsageResponse {
+function isValidQuota(q: unknown): q is QuotaData {
+  if (!q || typeof q !== 'object') return false
+  const qObj = q as Record<string, unknown>
+  return typeof qObj.utilization === 'number' && (typeof qObj.resets_at === 'string' || qObj.resets_at === null)
+}
+
+function isValidExtraUsage(e: unknown): e is ExtraUsageData {
+  if (!e || typeof e !== 'object') return false
+  const eObj = e as Record<string, unknown>
+  return typeof eObj.is_enabled === 'boolean' && typeof eObj.used_credits === 'number' &&
+    typeof eObj.monthly_limit === 'number' && typeof eObj.currency === 'string'
+}
+
+export function isValidUsageResponse(data: unknown): data is UsageResponse {
   if (!data || typeof data !== 'object') return false
   const obj = data as Record<string, unknown>
-
-  const isValidQuota = (q: unknown): q is QuotaData => {
-    if (!q || typeof q !== 'object') return false
-    const qObj = q as Record<string, unknown>
-    return typeof qObj.utilization === 'number' && (typeof qObj.resets_at === 'string' || qObj.resets_at === null)
-  }
-
   return isValidQuota(obj.five_hour) && isValidQuota(obj.seven_day)
+}
+
+export function formatTimeUntil(date: Date): string {
+  const diffMs = date.getTime() - Date.now()
+  if (Number.isNaN(diffMs)) return '—'
+  if (diffMs <= 0) return t('time.now')
+
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffDays > 0) return `${diffDays}d ${diffHours % 24}h`
+  if (diffHours > 0) return `${diffHours}h ${diffMinutes % 60}m`
+  return `${diffMinutes}m`
+}
+
+export function calculateResetProgress(resetsAt: Date, periodHours: number): number {
+  const resetTime = resetsAt.getTime()
+  if (Number.isNaN(resetTime)) return 0
+  const periodMs = periodHours * 60 * 60 * 1000
+  const elapsed = Date.now() - (resetTime - periodMs)
+  return Math.round(Math.max(0, Math.min(100, (elapsed / periodMs) * 100)))
 }
 
 export class QuotaService {
@@ -76,14 +104,14 @@ export class QuotaService {
         fiveHour: {
           utilization: lastQuota.fiveHour.utilization,
           resetsAt: fiveHourReset,
-          resetsIn: this.formatTimeUntil(fiveHourReset),
-          resetProgress: this.calculateResetProgress(fiveHourReset, 5)
+          resetsIn: formatTimeUntil(fiveHourReset),
+          resetProgress: calculateResetProgress(fiveHourReset, 5)
         },
         sevenDay: {
           utilization: lastQuota.sevenDay.utilization,
           resetsAt: sevenDayReset,
-          resetsIn: this.formatTimeUntil(sevenDayReset),
-          resetProgress: this.calculateResetProgress(sevenDayReset, 7 * 24)
+          resetsIn: formatTimeUntil(sevenDayReset),
+          resetProgress: calculateResetProgress(sevenDayReset, 7 * 24)
         },
         lastUpdated: new Date(lastQuota.fetchedAt)
       }
@@ -92,8 +120,8 @@ export class QuotaService {
         this.cachedQuota.sevenDayOpus = {
           utilization: lastQuota.sevenDayOpus.utilization,
           resetsAt: opusReset,
-          resetsIn: this.formatTimeUntil(opusReset),
-          resetProgress: this.calculateResetProgress(opusReset, 7 * 24)
+          resetsIn: formatTimeUntil(opusReset),
+          resetProgress: calculateResetProgress(opusReset, 7 * 24)
         }
       }
       this.lastFetchTime = lastQuota.fetchedAt
@@ -235,31 +263,31 @@ export class QuotaService {
         fiveHour: {
           utilization: data.five_hour.utilization,
           resetsAt: newFiveHourReset,
-          resetsIn: this.formatTimeUntil(newFiveHourReset),
-          resetProgress: this.calculateResetProgress(newFiveHourReset, 5)
+          resetsIn: formatTimeUntil(newFiveHourReset),
+          resetProgress: calculateResetProgress(newFiveHourReset, 5)
         },
         sevenDay: {
           utilization: data.seven_day.utilization,
           resetsAt: newSevenDayReset,
-          resetsIn: this.formatTimeUntil(newSevenDayReset),
-          resetProgress: this.calculateResetProgress(newSevenDayReset, 7 * 24)
+          resetsIn: formatTimeUntil(newSevenDayReset),
+          resetProgress: calculateResetProgress(newSevenDayReset, 7 * 24)
         },
         lastUpdated: new Date()
       }
 
       // Parse optional Opus weekly quota (Max plans)
-      if (data.seven_day_opus) {
+      if (isValidQuota(data.seven_day_opus)) {
         const opusReset = new Date(data.seven_day_opus.resets_at ?? NaN)
         this.cachedQuota.sevenDayOpus = {
           utilization: data.seven_day_opus.utilization,
           resetsAt: opusReset,
-          resetsIn: this.formatTimeUntil(opusReset),
-          resetProgress: this.calculateResetProgress(opusReset, 7 * 24)
+          resetsIn: formatTimeUntil(opusReset),
+          resetProgress: calculateResetProgress(opusReset, 7 * 24)
         }
       }
 
       // Parse optional extra usage / overage info
-      if (data.extra_usage) {
+      if (isValidExtraUsage(data.extra_usage)) {
         this.cachedQuota.extraUsage = {
           isEnabled: data.extra_usage.is_enabled,
           usedCredits: data.extra_usage.used_credits,
@@ -282,13 +310,14 @@ export class QuotaService {
         sevenDay: { utilization: data.seven_day.utilization, resetsAt: data.seven_day.resets_at },
         fetchedAt: this.lastFetchTime
       }
-      if (data.seven_day_opus) {
+      if (isValidQuota(data.seven_day_opus)) {
         persistedData.sevenDayOpus = { utilization: data.seven_day_opus.utilization, resetsAt: data.seven_day_opus.resets_at }
       }
       settingsStore.set('lastQuotaData', persistedData)
 
-      const opusLog = data.seven_day_opus ? `, opus=${Math.round(data.seven_day_opus.utilization)}%` : ''
-      const overageLog = data.extra_usage?.is_enabled ? `, overage=${(data.extra_usage.used_credits / 100).toFixed(2)} ${data.extra_usage.currency}` : ''
+      const { sevenDayOpus, extraUsage } = this.cachedQuota
+      const opusLog = sevenDayOpus ? `, opus=${Math.round(sevenDayOpus.utilization)}%` : ''
+      const overageLog = extraUsage?.isEnabled ? `, overage=${(extraUsage.usedCredits / 100).toFixed(2)} ${extraUsage.currency}` : ''
       logger.info(
         `Quota fetched (API): 5h=${Math.round(data.five_hour.utilization)}%, 7d=${Math.round(data.seven_day.utilization)}%${opusLog}${overageLog}`
       )
@@ -469,45 +498,6 @@ export class QuotaService {
     return t('error.rateLimitRetrySec', { sec: remainingSec })
   }
 
-  private formatTimeUntil(date: Date): string {
-    const now = new Date()
-    const diffMs = date.getTime() - now.getTime()
-    if (Number.isNaN(diffMs)) return '—'
-
-    if (diffMs <= 0) {
-      return t('time.now')
-    }
-
-    const diffMinutes = Math.floor(diffMs / (1000 * 60))
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-    if (diffDays > 0) {
-      const remainingHours = diffHours % 24
-      return `${diffDays}d ${remainingHours}h`
-    }
-
-    if (diffHours > 0) {
-      const remainingMinutes = diffMinutes % 60
-      return `${diffHours}h ${remainingMinutes}m`
-    }
-
-    return `${diffMinutes}m`
-  }
-
-  private calculateResetProgress(resetsAt: Date, periodHours: number): number {
-    const now = Date.now()
-    const resetTime = resetsAt.getTime()
-    if (Number.isNaN(resetTime)) return 0
-    const periodMs = periodHours * 60 * 60 * 1000
-    const startTime = resetTime - periodMs
-
-    const elapsed = now - startTime
-    const progress = Math.max(0, Math.min(100, (elapsed / periodMs) * 100))
-
-    return Math.round(progress)
-  }
-
   // Forget quota data from the previous account/auth source
   clear(): void {
     this.cachedQuota = null
@@ -524,20 +514,20 @@ export class QuotaService {
       error: this.getLastError() ?? undefined,
       fiveHour: {
         ...this.cachedQuota.fiveHour,
-        resetsIn: this.formatTimeUntil(this.cachedQuota.fiveHour.resetsAt),
-        resetProgress: this.calculateResetProgress(this.cachedQuota.fiveHour.resetsAt, 5)
+        resetsIn: formatTimeUntil(this.cachedQuota.fiveHour.resetsAt),
+        resetProgress: calculateResetProgress(this.cachedQuota.fiveHour.resetsAt, 5)
       },
       sevenDay: {
         ...this.cachedQuota.sevenDay,
-        resetsIn: this.formatTimeUntil(this.cachedQuota.sevenDay.resetsAt),
-        resetProgress: this.calculateResetProgress(this.cachedQuota.sevenDay.resetsAt, 7 * 24)
+        resetsIn: formatTimeUntil(this.cachedQuota.sevenDay.resetsAt),
+        resetProgress: calculateResetProgress(this.cachedQuota.sevenDay.resetsAt, 7 * 24)
       }
     }
     if (this.cachedQuota.sevenDayOpus) {
       result.sevenDayOpus = {
         ...this.cachedQuota.sevenDayOpus,
-        resetsIn: this.formatTimeUntil(this.cachedQuota.sevenDayOpus.resetsAt),
-        resetProgress: this.calculateResetProgress(this.cachedQuota.sevenDayOpus.resetsAt, 7 * 24)
+        resetsIn: formatTimeUntil(this.cachedQuota.sevenDayOpus.resetsAt),
+        resetProgress: calculateResetProgress(this.cachedQuota.sevenDayOpus.resetsAt, 7 * 24)
       }
     }
     return result
