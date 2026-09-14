@@ -53,10 +53,12 @@ if (!gotTheLock) {
       updaterService.checkForUpdates()
     }, 5000)
 
-    // Refresh after wake from sleep (network needs a moment to reconnect)
+    // Restart after wake from sleep: drops backoff timers frozen during sleep
+    // (network needs a moment to reconnect)
     powerMonitor.on('resume', () => {
-      logger.info('System resumed from sleep, scheduling refresh')
-      setTimeout(() => schedulerService.refresh(), 2000)
+      logger.info('System resumed from sleep, restarting scheduler')
+      schedulerService.stop()
+      setTimeout(() => schedulerService.start(), 2000)
     })
 
     logger.info('Claude Bar started successfully')

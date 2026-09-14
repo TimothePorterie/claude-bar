@@ -52,6 +52,11 @@ export class SchedulerService {
       clearInterval(this.intervalId)
       this.intervalId = null
     }
+    this.clearRetryTimers()
+    this.consecutiveErrors = 0
+  }
+
+  private clearRetryTimers(): void {
     if (this.rateLimitRetryId) {
       clearTimeout(this.rateLimitRetryId)
       this.rateLimitRetryId = null
@@ -60,7 +65,6 @@ export class SchedulerService {
       clearTimeout(this.backoffRetryId)
       this.backoffRetryId = null
     }
-    this.consecutiveErrors = 0
   }
 
   async refresh(force = false): Promise<void> {
@@ -94,6 +98,7 @@ export class SchedulerService {
       } else {
         // Success — reset backoff and restart interval
         this.consecutiveErrors = 0
+        this.clearRetryTimers()
         this.restartInterval()
       }
 
