@@ -1,4 +1,4 @@
-import { BrowserWindow, screen, app, session, ipcMain } from 'electron'
+import { BrowserWindow, screen, app, session, ipcMain, systemPreferences } from 'electron'
 import { join } from 'path'
 import { trayManager } from './tray'
 import { logger } from './services/logger'
@@ -35,18 +35,60 @@ export class WindowManager {
   private settingsWindow: BrowserWindow | null = null
   private securityInitialized = false
   private ipcSetup = false
+  private popupHiddenAt = 0
 
   constructor() {
     // Defer security setup until app is ready
     if (app.isReady()) {
       this.setupSecurityHeaders()
       this.setupIpcHandlers()
+      this.setupAutoHide()
     } else {
       app.once('ready', () => {
         this.setupSecurityHeaders()
         this.setupIpcHandlers()
+        this.setupAutoHide()
       })
     }
+  }
+
+  // Close the popup when the context changes under it: Space switch (incl. an app
+  // going fullscreen) or display configuration change. Blur covers app switches.
+  private setupAutoHide(): void {
+    const hide = (): void => this.hidePopup()
+    systemPreferences.subscribeWorkspaceNotification('NSWorkspaceActiveSpaceDidChangeNotification', hide)
+    screen.on('display-added', hide)
+    screen.on('display-removed', hide)
+    screen.on('display-metrics-changed', hide)
+  }
+
+  private hidePopup(): void {
+    if (this.popupWindow && !this.popupWindow.isDestroyed() && this.popupWindow.isVisible()) {
+      this.popupWindow.hide()
+      this.popupHiddenAt = Date.now()
+    }
+  }
+
+  // Place the popup under the tray icon, on the display that holds it
+  private positionPopup(): void {
+    if (!this.popupWindow || this.popupWindow.isDestroyed()) return
+    const trayBounds = trayManager.getBounds()
+    if (!trayBounds) return
+
+    const { width } = this.popupWindow.getBounds()
+    const area = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y }).workArea
+    let x = Math.round(trayBounds.x - width / 2 + trayBounds.width / 2)
+    x = Math.max(area.x + 10, Math.min(x, area.x + area.width - width - 10))
+    this.popupWindow.setPosition(x, trayBounds.y + trayBounds.height + 5)
+  }
+
+  private revealPopup(): void {
+    if (!this.popupWindow || this.popupWindow.isDestroyed()) return
+    this.positionPopup()
+    // Activate the app so the popup becomes key and receives blur when clicking elsewhere
+    app.focus({ steal: true })
+    this.popupWindow.show()
+    this.popupWindow.focus()
   }
 
   private setupIpcHandlers(): void {
@@ -132,33 +174,12 @@ export class WindowManager {
       this.popupWindow.close()
     }
 
-    const trayBounds = trayManager.getBounds()
-    const display = screen.getDisplayNearestPoint({
-      x: trayBounds?.x ?? 0,
-      y: trayBounds?.y ?? 0
-    })
-
     const popupWidth = 320
     const popupHeight = 300 // Initial height, will be adjusted based on content
-
-    // Position popup below the tray icon
-    let x = trayBounds ? Math.round(trayBounds.x - popupWidth / 2 + trayBounds.width / 2) : 100
-    let y = trayBounds ? trayBounds.y + trayBounds.height + 5 : 30
-
-    // Ensure popup stays within screen bounds
-    const displayBounds = display.workArea
-    if (x + popupWidth > displayBounds.x + displayBounds.width) {
-      x = displayBounds.x + displayBounds.width - popupWidth - 10
-    }
-    if (x < displayBounds.x) {
-      x = displayBounds.x + 10
-    }
 
     this.popupWindow = new BrowserWindow({
       width: popupWidth,
       height: popupHeight,
-      x,
-      y,
       frame: false,
       resizable: false,
       movable: false,
@@ -171,7 +192,6 @@ export class WindowManager {
       transparent: true,
       vibrancy: 'popover',
       visualEffectState: 'active',
-      visibleOnAllWorkspaces: true,
       fullscreenable: false,
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
@@ -187,8 +207,10 @@ export class WindowManager {
       }
     })
 
-    // Enable visibility on fullscreen apps (macOS)
-    this.popupWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    // Open on whichever Space is active, including over fullscreen apps (macOS).
+    // skipTransformProcessType keeps the dock icon hidden.
+    this.popupWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
+    this.popupWindow.setAlwaysOnTop(true, 'pop-up-menu')
 
     // Load the popup HTML
     if (app.isPackaged) {
@@ -203,16 +225,9 @@ export class WindowManager {
     }
 
     // Hide when loses focus
-    this.popupWindow.on('blur', () => {
-      if (this.popupWindow && !this.popupWindow.isDestroyed()) {
-        this.popupWindow.hide()
-      }
-    })
+    this.popupWindow.on('blur', () => this.hidePopup())
 
-    this.popupWindow.once('ready-to-show', () => {
-      this.popupWindow?.showInactive()
-      this.popupWindow?.focus()
-    })
+    this.popupWindow.once('ready-to-show', () => this.revealPopup())
 
     return this.popupWindow
   }
@@ -221,18 +236,11 @@ export class WindowManager {
     if (!this.popupWindow || this.popupWindow.isDestroyed()) {
       this.createPopupWindow()
     } else if (this.popupWindow.isVisible()) {
-      this.popupWindow.hide()
-    } else {
-      // Reposition in case tray moved
-      const trayBounds = trayManager.getBounds()
-      if (trayBounds) {
-        const popupBounds = this.popupWindow.getBounds()
-        const x = Math.round(trayBounds.x - popupBounds.width / 2 + trayBounds.width / 2)
-        const y = trayBounds.y + trayBounds.height + 5
-        this.popupWindow.setPosition(x, y)
-      }
-      this.popupWindow.showInactive()
-      this.popupWindow.focus()
+      this.hidePopup()
+    } else if (Date.now() - this.popupHiddenAt > 300) {
+      // Clicking the tray icon blurs the popup before the click lands:
+      // without this guard the toggle-close would immediately reopen it
+      this.revealPopup()
     }
   }
 
