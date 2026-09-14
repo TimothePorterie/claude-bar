@@ -193,7 +193,7 @@ export class AuthService {
 
       if (!response.ok) {
         const errorText = await response.text()
-        logger.error(`Token exchange failed: ${response.status} - ${errorText}`)
+        logger.error(`Token exchange failed: ${response.status} - ${errorText.slice(0, 200)}`)
         this.clearLoginState()
         return { success: false, error: t('auth.authFailed', { status: response.status }) }
       }
@@ -292,7 +292,7 @@ export class AuthService {
 
       if (!response.ok) {
         const errorText = await response.text()
-        logger.error(`Auth token refresh failed: ${response.status} - ${errorText}`)
+        logger.error(`Auth token refresh failed: ${response.status} - ${errorText.slice(0, 200)}`)
         this.setState('expired')
         return false
       }

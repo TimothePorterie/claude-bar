@@ -367,7 +367,7 @@ export class QuotaService {
 
       // All other errors — no retry
       const errorText = await response.text()
-      logger.error(`API error: ${response.status} - ${errorText}`)
+      logger.error(`API error: ${response.status} - ${errorText.slice(0, 200)}`)
       this.lastError = this.classifyError(new Error(`HTTP ${response.status}: ${errorText}`))
       return null
     } catch (error) {
