@@ -1,109 +1,144 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-describe('QuotaService utilities', () => {
-  describe('formatTimeUntil', () => {
-    function formatTimeUntil(date: Date): string {
-      const now = new Date()
-      const diffMs = date.getTime() - now.getTime()
+const store: Record<string, unknown> = {}
+vi.mock('../src/main/services/settings-store', () => ({
+  settingsStore: {
+    get: (key: string) => store[key],
+    set: (key: string, value: unknown) => { store[key] = value }
+  }
+}))
+vi.mock('../src/main/services/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
+}))
+const keychain = { getCredentials: vi.fn(), isTokenExpired: vi.fn() }
+vi.mock('../src/main/services/keychain', () => ({ keychainService: keychain }))
+vi.mock('../src/main/services/auth', () => ({
+  authService: { getValidAccessToken: vi.fn(), refreshTokens: vi.fn(), getUserInfo: vi.fn() }
+}))
 
-      if (diffMs <= 0) {
-        return 'Now'
-      }
+const { QuotaService, isValidUsageResponse, formatTimeUntil, calculateResetProgress } = await import(
+  '../src/main/services/quota-api'
+)
 
-      const diffMinutes = Math.floor(diffMs / (1000 * 60))
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+const HOUR = 60 * 60 * 1000
+const usage = (overrides: Record<string, unknown> = {}) => ({
+  five_hour: { utilization: 45, resets_at: new Date(Date.now() + 2 * HOUR).toISOString() },
+  seven_day: { utilization: 32, resets_at: new Date(Date.now() + 48 * HOUR).toISOString() },
+  ...overrides
+})
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
+const fetchMock = vi.fn()
 
-      if (diffDays > 0) {
-        const remainingHours = diffHours % 24
-        return `${diffDays}d ${remainingHours}h`
-      }
+beforeEach(() => {
+  for (const key of Object.keys(store)) delete store[key]
+  Object.assign(store, { authMode: 'cli', rateLimitedUntil: 0, lastQuotaData: null })
+  keychain.getCredentials.mockReset().mockResolvedValue({ accessToken: 'token-a' })
+  keychain.isTokenExpired.mockReset().mockReturnValue(false)
+  fetchMock.mockReset()
+  vi.stubGlobal('fetch', fetchMock)
+})
 
-      if (diffHours > 0) {
-        const remainingMinutes = diffMinutes % 60
-        return `${diffHours}h ${remainingMinutes}m`
-      }
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
 
-      return `${diffMinutes}m`
-    }
-
-    it('should return "Now" for past dates', () => {
-      const pastDate = new Date(Date.now() - 1000)
-      expect(formatTimeUntil(pastDate)).toBe('Now')
-    })
-
-    it('should format minutes correctly', () => {
-      const futureDate = new Date(Date.now() + 30 * 60 * 1000 + 30 * 1000)
-      expect(formatTimeUntil(futureDate)).toBe('30m')
-    })
-
-    it('should format hours and minutes correctly', () => {
-      const futureDate = new Date(Date.now() + 2 * 60 * 60 * 1000 + 30 * 60 * 1000 + 30 * 1000)
-      expect(formatTimeUntil(futureDate)).toBe('2h 30m')
-    })
-
-    it('should format days and hours correctly', () => {
-      const futureDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 5 * 60 * 60 * 1000 + 30 * 1000)
-      expect(formatTimeUntil(futureDate)).toBe('2d 5h')
-    })
+describe('pure helpers', () => {
+  it('accepts null resets_at (no active session window)', () => {
+    expect(isValidUsageResponse(usage({ five_hour: { utilization: 0, resets_at: null } }))).toBe(true)
+    expect(isValidUsageResponse(usage({ five_hour: { resets_at: null } }))).toBe(false)
   })
 
-  describe('getQuotaLevel', () => {
-    function getQuotaLevel(
-      fiveHour: number,
-      sevenDay: number
-    ): 'normal' | 'warning' | 'critical' {
-      const maxUtilization = Math.max(fiveHour, sevenDay)
-
-      if (maxUtilization >= 90) return 'critical'
-      if (maxUtilization >= 70) return 'warning'
-      return 'normal'
-    }
-
-    it('should return normal for low utilization', () => {
-      expect(getQuotaLevel(30, 25)).toBe('normal')
-      expect(getQuotaLevel(69, 50)).toBe('normal')
-    })
-
-    it('should return warning for medium utilization', () => {
-      expect(getQuotaLevel(70, 50)).toBe('warning')
-      expect(getQuotaLevel(50, 75)).toBe('warning')
-      expect(getQuotaLevel(89, 60)).toBe('warning')
-    })
-
-    it('should return critical for high utilization', () => {
-      expect(getQuotaLevel(90, 50)).toBe('critical')
-      expect(getQuotaLevel(50, 95)).toBe('critical')
-      expect(getQuotaLevel(100, 100)).toBe('critical')
-    })
-
-    it('should use the maximum of both quotas', () => {
-      expect(getQuotaLevel(50, 91)).toBe('critical')
-      expect(getQuotaLevel(91, 50)).toBe('critical')
-    })
+  it('formats time until reset', () => {
+    expect(formatTimeUntil(new Date(NaN))).toBe('—')
+    expect(formatTimeUntil(new Date(Date.now() - 1000))).toBe('Now')
+    expect(formatTimeUntil(new Date(Date.now() + 2.5 * HOUR + 30_000))).toBe('2h 30m')
+    expect(formatTimeUntil(new Date(Date.now() + 53 * HOUR + 30_000))).toBe('2d 5h')
   })
 
-  describe('getFormattedTitle', () => {
-    function getFormattedTitle(
-      fiveHour: number | null,
-      sevenDay: number | null
-    ): string {
-      if (fiveHour === null || sevenDay === null) {
-        return '-- / --'
-      }
+  it('computes reset progress', () => {
+    expect(calculateResetProgress(new Date(NaN), 5)).toBe(0)
+    expect(calculateResetProgress(new Date(Date.now() + 2.5 * HOUR), 5)).toBe(50)
+  })
+})
 
-      const fh = Math.round(fiveHour)
-      const sd = Math.round(sevenDay)
+describe('QuotaService', () => {
+  it('parses a response with null resets_at', async () => {
+    fetchMock.mockResolvedValueOnce(json(usage({ five_hour: { utilization: 0, resets_at: null } })))
+    const quota = await new QuotaService().fetchQuota(true)
+    expect(quota?.fiveHour.resetsIn).toBe('—')
+    expect(quota?.sevenDay.utilization).toBe(32)
+  })
 
-      return `${fh}% / ${sd}%`
-    }
+  it('ignores extra_usage with an invalid currency', async () => {
+    fetchMock.mockResolvedValueOnce(
+      json(usage({ extra_usage: { is_enabled: true, used_credits: 100, monthly_limit: 0, currency: null } }))
+    )
+    const quota = await new QuotaService().fetchQuota(true)
+    expect(quota?.extraUsage).toBeUndefined()
+  })
 
-    it('should return placeholder for null values', () => {
-      expect(getFormattedTitle(null, null)).toBe('-- / --')
-    })
+  it('CLI mode: expired Keychain token is reported without calling the API', async () => {
+    keychain.isTokenExpired.mockReturnValue(true)
+    const service = new QuotaService()
+    expect(await service.fetchQuota(true)).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(service.getLastError()).toMatchObject({ type: 'auth', retryable: true })
+  })
 
-    it('should format standard title correctly', () => {
-      expect(getFormattedTitle(45.6, 32.3)).toBe('46% / 32%')
-    })
+  it('CLI mode: 401 re-reads the Keychain and never hits a refresh endpoint', async () => {
+    fetchMock.mockResolvedValueOnce(json({}, 401))
+    const service = new QuotaService()
+    expect(await service.fetchQuota(true)).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(keychain.getCredentials).toHaveBeenCalledTimes(2)
+    expect(service.getLastError()?.type).toBe('auth')
+  })
+
+  it('CLI mode: 401 retries with the token Claude Code rotated', async () => {
+    keychain.getCredentials
+      .mockResolvedValueOnce({ accessToken: 'token-a' })
+      .mockResolvedValueOnce({ accessToken: 'token-b' })
+    fetchMock.mockResolvedValueOnce(json({}, 401)).mockResolvedValueOnce(json(usage()))
+    const quota = await new QuotaService().fetchQuota(true)
+    expect(quota?.fiveHour.utilization).toBe(45)
+    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('Bearer token-b')
+  })
+
+  it('surfaces the last error alongside cached data', async () => {
+    fetchMock.mockResolvedValueOnce(json(usage())).mockResolvedValueOnce(json({}, 500))
+    const service = new QuotaService()
+    await service.fetchQuota(true)
+    vi.useFakeTimers({ now: Date.now() + 20_000 })
+    await service.fetchQuota(true)
+    expect(service.getCachedQuota()?.error?.type).toBe('server')
+  })
+
+  it('does not throttle a scheduled fetch exactly one interval after the previous one', async () => {
+    fetchMock.mockImplementation(async () => json(usage()))
+    const service = new QuotaService()
+    vi.useFakeTimers({ now: Date.now() })
+    await service.fetchQuota()
+    // setInterval ticks from the request start; the response lands a bit later
+    vi.setSystemTime(Date.now() + 300_000 - 500)
+    await service.fetchQuota()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows a rate-limit error when a restored cooldown has nothing cached', async () => {
+    store.rateLimitedUntil = Date.now() + 60_000
+    const service = new QuotaService()
+    expect(await service.fetchQuota(true)).toBeNull()
+    expect(service.getLastError()?.type).toBe('rate_limit')
+  })
+
+  it('clear() forgets cached and persisted quota', async () => {
+    fetchMock.mockResolvedValueOnce(json(usage()))
+    const service = new QuotaService()
+    await service.fetchQuota(true)
+    expect(store.lastQuotaData).not.toBeNull()
+    service.clear()
+    expect(service.getCachedQuota()).toBeNull()
+    expect(store.lastQuotaData).toBeNull()
   })
 })
