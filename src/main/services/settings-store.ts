@@ -16,6 +16,7 @@ interface SettingsStoreSchema {
   rateLimitedUntil: number
   lastQuotaData: PersistedQuotaData | null
   displayMode: string
+  notifiedLevels: Record<string, 'normal' | 'warning' | 'critical'>
 }
 
 export type { PersistedQuotaData }
@@ -29,7 +30,8 @@ export const settingsStore = new Store<SettingsStoreSchema>({
     language: 'en' as const,
     rateLimitedUntil: 0,
     lastQuotaData: null,
-    displayMode: 'standard'
+    displayMode: 'standard',
+    notifiedLevels: {}
   }
 })
 
