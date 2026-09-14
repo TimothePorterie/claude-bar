@@ -1,9 +1,9 @@
 import Store from 'electron-store'
 
 interface PersistedQuotaData {
-  fiveHour: { utilization: number; resetsAt: string }
-  sevenDay: { utilization: number; resetsAt: string }
-  sevenDayOpus?: { utilization: number; resetsAt: string }
+  fiveHour: { utilization: number; resetsAt: string | null }
+  sevenDay: { utilization: number; resetsAt: string | null }
+  sevenDayOpus?: { utilization: number; resetsAt: string | null }
   fetchedAt: number
 }
 

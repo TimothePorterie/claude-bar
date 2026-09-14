@@ -8,7 +8,7 @@ import type { QuotaError, QuotaPeriod, QuotaInfo, ExtraUsageInfo } from '../../s
 
 export interface QuotaData {
   utilization: number
-  resets_at: string
+  resets_at: string | null
 }
 
 export interface ExtraUsageData {
@@ -38,7 +38,7 @@ function isValidUsageResponse(data: unknown): data is UsageResponse {
   const isValidQuota = (q: unknown): q is QuotaData => {
     if (!q || typeof q !== 'object') return false
     const qObj = q as Record<string, unknown>
-    return typeof qObj.utilization === 'number' && typeof qObj.resets_at === 'string'
+    return typeof qObj.utilization === 'number' && (typeof qObj.resets_at === 'string' || qObj.resets_at === null)
   }
 
   return isValidQuota(obj.five_hour) && isValidQuota(obj.seven_day)
@@ -71,8 +71,8 @@ export class QuotaService {
     // Restore persisted quota data (if < 24h old)
     const lastQuota = settingsStore.get('lastQuotaData') as PersistedQuotaData | null
     if (lastQuota && Date.now() - lastQuota.fetchedAt < 24 * 60 * 60 * 1000) {
-      const fiveHourReset = new Date(lastQuota.fiveHour.resetsAt)
-      const sevenDayReset = new Date(lastQuota.sevenDay.resetsAt)
+      const fiveHourReset = new Date(lastQuota.fiveHour.resetsAt ?? NaN)
+      const sevenDayReset = new Date(lastQuota.sevenDay.resetsAt ?? NaN)
       this.cachedQuota = {
         fiveHour: {
           utilization: lastQuota.fiveHour.utilization,
@@ -89,7 +89,7 @@ export class QuotaService {
         lastUpdated: new Date(lastQuota.fetchedAt)
       }
       if (lastQuota.sevenDayOpus) {
-        const opusReset = new Date(lastQuota.sevenDayOpus.resetsAt)
+        const opusReset = new Date(lastQuota.sevenDayOpus.resetsAt ?? NaN)
         this.cachedQuota.sevenDayOpus = {
           utilization: lastQuota.sevenDayOpus.utilization,
           resetsAt: opusReset,
@@ -237,8 +237,8 @@ export class QuotaService {
       }
       const data = rawData
 
-      const newFiveHourReset = new Date(data.five_hour.resets_at)
-      const newSevenDayReset = new Date(data.seven_day.resets_at)
+      const newFiveHourReset = new Date(data.five_hour.resets_at ?? NaN)
+      const newSevenDayReset = new Date(data.seven_day.resets_at ?? NaN)
 
       this.cachedQuota = {
         fiveHour: {
@@ -258,7 +258,7 @@ export class QuotaService {
 
       // Parse optional Opus weekly quota (Max plans)
       if (data.seven_day_opus) {
-        const opusReset = new Date(data.seven_day_opus.resets_at)
+        const opusReset = new Date(data.seven_day_opus.resets_at ?? NaN)
         this.cachedQuota.sevenDayOpus = {
           utilization: data.seven_day_opus.utilization,
           resetsAt: opusReset,
@@ -498,6 +498,7 @@ export class QuotaService {
   private formatTimeUntil(date: Date): string {
     const now = new Date()
     const diffMs = date.getTime() - now.getTime()
+    if (Number.isNaN(diffMs)) return '—'
 
     if (diffMs <= 0) {
       return t('time.now')
@@ -523,6 +524,7 @@ export class QuotaService {
   private calculateResetProgress(resetsAt: Date, periodHours: number): number {
     const now = Date.now()
     const resetTime = resetsAt.getTime()
+    if (Number.isNaN(resetTime)) return 0
     const periodMs = periodHours * 60 * 60 * 1000
     const startTime = resetTime - periodMs
 
