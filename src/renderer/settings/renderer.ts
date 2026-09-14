@@ -94,6 +94,8 @@ language.addEventListener('change', async () => {
     await window.claudeBar.setLanguage(lang)
     setLocale(lang)
     applyI18n()
+    loadConnectionStatus()
+    loadUpdateInfo()
   } catch (error) {
     console.error('Failed to update language:', error)
   }
@@ -209,6 +211,8 @@ const appVersion = document.getElementById('appVersion') as HTMLElement
 
 function updateUpdateUI(state: { status: string; version?: string; progress?: number; error?: string }): void {
   checkUpdateBtn.disabled = false
+  checkUpdateBtn.style.display = ''
+  installUpdateBtn.disabled = false
   installUpdateBtn.style.display = 'none'
   updateProgress.style.display = 'none'
   updateProgress.classList.remove('indeterminate')
