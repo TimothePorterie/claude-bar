@@ -203,6 +203,7 @@ export function setupIpcHandlers(): void {
     try {
       store.set('language', lang)
       setLocale(lang)
+      windowManager.closePopup()
       logger.info(`Language set to '${lang}'`)
       return true
     } catch (error) {

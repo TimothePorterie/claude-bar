@@ -2,6 +2,7 @@ import { BrowserWindow, screen, app, session, ipcMain, systemPreferences } from 
 import { join } from 'path'
 import { trayManager } from './tray'
 import { logger } from './services/logger'
+import { quotaService } from './services/quota-api'
 
 // Content Security Policy
 const CSP = [
@@ -85,6 +86,9 @@ export class WindowManager {
   private revealPopup(): void {
     if (!this.popupWindow || this.popupWindow.isDestroyed()) return
     this.positionPopup()
+    // resetsIn/resetProgress are computed at send time — refresh them on every open
+    const quota = quotaService.getCachedQuota()
+    if (quota) this.sendToPopup('quota-updated', quota)
     // Activate the app so the popup becomes key and receives blur when clicking elsewhere
     app.focus({ steal: true })
     this.popupWindow.show()
@@ -306,6 +310,14 @@ export class WindowManager {
 
   showSettings(): void {
     this.createSettingsWindow()
+  }
+
+  // Renderer reads the locale at load: drop the popup so it's rebuilt in the new language
+  closePopup(): void {
+    if (this.popupWindow && !this.popupWindow.isDestroyed()) {
+      this.popupWindow.close()
+    }
+    this.popupWindow = null
   }
 
   closeAll(): void {
