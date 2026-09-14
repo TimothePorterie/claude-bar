@@ -66,9 +66,9 @@ export class TrayManager {
       if (quota) {
         windowManager.sendToPopup('quota-updated', quota)
       }
-      // Forward real errors to popup (not rate limits — those are transient)
+      // Nothing to show: forward the error so the popup doesn't stay on the skeleton
       const error = quotaService.getLastError()
-      if (error && !quota && error.type !== 'rate_limit') {
+      if (error && !quota) {
         windowManager.sendToPopup('quota-error', error)
       }
     })

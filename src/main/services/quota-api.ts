@@ -173,6 +173,8 @@ export class QuotaService {
       if (this.cachedQuota) {
         return this.getCachedQuota()!
       }
+      // Cooldown restored at startup with nothing cached: surface it instead of an endless skeleton
+      this.lastError = { type: 'rate_limit', message: this.formatRateLimitMessage(), retryable: true }
       return null
     }
     return this.doApiFetch()
